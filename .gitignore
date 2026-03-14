@@ -1,0 +1,16 @@
+# Bytecode / caches
+__pycache__/
+*.py[cod]
+
+# Local machine pointers (not portable/public)
+links/
+
+# Local runtime state/logs
+state/
+notes/promotions.md
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
