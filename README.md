@@ -51,8 +51,9 @@ This means:
 3. `docs/RUNNING.md`
 4. `docs/ARCHITECTURE.md`
 5. `docs/ROADMAP.md`
-6. `src/cli.py`
-7. `links/`
+6. `SECURITY.md`
+7. `src/cli.py`
+8. `links/`
 
 ## Current CLI status
 

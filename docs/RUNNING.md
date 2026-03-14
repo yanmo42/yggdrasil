@@ -163,6 +163,7 @@ Read these in order if you want the full model:
 3. `~/ygg/docs/VERBS.md`
 4. `~/ygg/docs/ARCHITECTURE.md`
 5. `~/ygg/docs/ROADMAP.md`
+6. `~/ygg/SECURITY.md`
 
 ## v1 limitations
 
