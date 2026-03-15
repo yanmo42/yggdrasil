@@ -108,8 +108,8 @@ This file makes verb behavior explicit so human/machine usage stays aligned.
 - requires: `domain`, `task`, `--disposition`
 - optional: `--note`, `--artifact` (repeatable), `--finish`, `--dry-run`
 - writes:
-  - `~/ygg/state/promotions.jsonl`
-  - `~/ygg/notes/promotions.md`
+  - `~/ygg/state/runtime/promotions.jsonl`
+  - `~/ygg/state/notes/promotions.md`
   - optional workspace baton updates (`checkpoint`/`finish`)
 - guarantees:
   - records explicit disposition with timestamp
@@ -128,6 +128,47 @@ This file makes verb behavior explicit so human/machine usage stays aligned.
   - prints current baton summary for all domains or one domain
 - fails when:
   - resume status command exits non-zero
+
+## `ygg raven` (namespace)
+
+- mutates state: `true`
+- requires: subcommand (`launch|status|inspect|return`)
+- optional: `--json` plus subcommand-specific flags
+- writes:
+  - `~/ygg/state/runtime/ravens/flights/*.json`
+  - `~/ygg/state/runtime/ravens/logs/*.jsonl`
+  - `~/ygg/state/runtime/ravens/returns/*.md`
+- guarantees:
+  - launch emits at least commissioned + launched event records
+  - inspect/status expose persisted flight state
+  - return writes a structured return packet artifact
+- fails when:
+  - unknown `flight-id` is provided
+  - return artifact already exists without `--force`
+
+## `ygg graft` (namespace)
+
+- mutates state: `true`
+- requires: subcommand (`propose`) + `title`
+- optional: `--target-attachment`, `--why-now`, `--risk-class`, `--source-flight`, `--id`, `--json`
+- writes:
+  - `~/ygg/state/runtime/ravens/grafts/GRAFT-*.md`
+- guarantees:
+  - creates additive proposal artifacts only (no automatic execution)
+- fails when:
+  - proposal id already exists without `--force`
+
+## `ygg beak` (namespace)
+
+- mutates state: `true`
+- requires: subcommand (`propose`) + `title`
+- optional: `--class`, `--target`, `--problem-type`, `--evidence`, `--source-flight`, `--id`, `--json`
+- writes:
+  - `~/ygg/state/runtime/ravens/beaks/BEAK-*.md`
+- guarantees:
+  - creates pruning/reshaping proposal artifacts only (no destructive execution)
+- fails when:
+  - proposal id already exists without `--force`
 
 ---
 

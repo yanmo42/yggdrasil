@@ -97,6 +97,22 @@ ygg paths check
 ygg paths check --json
 ```
 
+### Run RAVENS v1 flights
+
+```bash
+ygg raven launch --trigger human-request "Inspect package boundary drift"
+ygg raven status
+ygg raven inspect <flight-id>
+ygg raven return <flight-id>
+```
+
+### Propose growth/pruning artifacts
+
+```bash
+ygg graft propose "Add proposal gate" --target-attachment state/policy/
+ygg beak propose "Deprecate duplicate docs" --target code/docs/ --problem-type duplication
+```
+
 ### Enter planner/work front door
 
 ```bash
@@ -146,6 +162,10 @@ Several verbs support non-mutating inspection modes:
 ygg suggest "implement the improved theme selector UX"
 ygg suggest --json "implement the improved theme selector UX"
 ygg help suggest --json
+ygg raven launch --trigger heartbeat "scan env" --json
+ygg raven status --json
+ygg graft propose "Add proposal gate" --json
+ygg beak propose "Mark stale branch" --json
 ygg root --print-packet "help me plan"
 ygg resume website-dev theme-selector-enhancements --print-only
 ygg branch demo-domain demo-task --dry-run
@@ -180,13 +200,14 @@ Read these in order if you want the full model:
 1. `~/ygg/README.md`
 2. `~/ygg/code/docs/NORTH-STAR.md`
 3. `~/ygg/code/docs/RAVENS.md`
-4. `~/ygg/code/docs/VOCAB.md`
-5. `~/ygg/code/docs/VERBS.md`
-6. `~/ygg/code/docs/CONTRACTS.md`
-7. `~/ygg/code/docs/CONTINUITY-OPS-V1.md`
-8. `~/ygg/code/docs/ARCHITECTURE.md`
-9. `~/ygg/code/docs/ROADMAP.md`
-10. `~/ygg/SECURITY.md`
+4. `~/ygg/code/docs/RAVENS-V1.md`
+5. `~/ygg/code/docs/VOCAB.md`
+6. `~/ygg/code/docs/VERBS.md`
+7. `~/ygg/code/docs/CONTRACTS.md`
+8. `~/ygg/code/docs/CONTINUITY-OPS-V1.md`
+9. `~/ygg/code/docs/ARCHITECTURE.md`
+10. `~/ygg/code/docs/ROADMAP.md`
+11. `~/ygg/SECURITY.md`
 
 ## v1 limitations
 

@@ -270,6 +270,64 @@ ygg status website-dev
 
 ---
 
+## `ygg raven`
+
+### Purpose
+Run RAVENS v1 flight operations.
+
+### v1 behavior
+- `ygg raven launch ...` creates a flight artifact + event log entries
+- `ygg raven status` lists known flights
+- `ygg raven inspect <flight-id>` prints one flight artifact
+- `ygg raven return <flight-id>` writes a structured return packet and marks the flight returned
+
+### Safety posture
+- artifact scaffolding only
+- no destructive execution
+- no autonomous hard-beak actions
+
+### Examples
+```bash
+ygg raven launch --trigger human-request "Inspect package boundary drift"
+ygg raven status
+ygg raven return <flight-id>
+```
+
+---
+
+## `ygg graft`
+
+### Purpose
+Create additive structural growth proposals.
+
+### v1 behavior
+- `ygg graft propose ...` writes a `GRAFT-*.md` artifact under raven runtime state
+- proposal only (no automatic application)
+
+### Example
+```bash
+ygg graft propose "Add proposal gate" --target-attachment state/policy/
+```
+
+---
+
+## `ygg beak`
+
+### Purpose
+Create subtractive/reshaping proposals for governance review.
+
+### v1 behavior
+- `ygg beak propose ...` writes a `BEAK-*.md` artifact
+- defaults to soft beak class
+- hard beaks are metadata/proposal only in v1
+
+### Example
+```bash
+ygg beak propose "Deprecate duplicate docs" --target code/docs/ --problem-type duplication
+```
+
+---
+
 ## v1 summary
 
 The initial Ygg command family is about:

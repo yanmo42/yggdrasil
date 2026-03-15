@@ -2,6 +2,9 @@
 
 Purpose: define a flexible signal-and-return subsystem inside Yggdrasil.
 
+Implementation note:
+- for the concrete contract, see `code/docs/RAVENS-V1.md`
+
 This is intentionally a little loose for now.
 It should feel more like a living metaphor with operational value than a fully frozen taxonomy.
 Like wings in the wind.

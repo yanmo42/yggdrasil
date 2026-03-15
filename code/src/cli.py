@@ -11,6 +11,16 @@ from datetime import datetime
 from pathlib import Path
 
 from path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
+from ravens_v1 import (
+    create_return_packet,
+    ensure_raven_dirs,
+    launch_flight,
+    list_flights,
+    load_flight,
+    parse_actors,
+    propose_beak,
+    propose_graft,
+)
 
 HOME = Path.home()
 RUNTIME_PATHS: RuntimePaths = resolve_runtime_paths()
@@ -23,6 +33,7 @@ STATE_DIR = YGG_HOME / "state" / "runtime"
 NOTES_DIR = YGG_HOME / "state" / "notes"
 PROMOTION_LOG_JSONL = STATE_DIR / "promotions.jsonl"
 PROMOTION_LOG_MD = NOTES_DIR / "promotions.md"
+RAVEN_STATE_DIR = STATE_DIR
 DEFAULT_SESSION = "planner--main"
 DEFAULT_OPENCLAW_BIN = "openclaw"
 
@@ -73,6 +84,15 @@ EXPLAIN_CARDS = {
         ],
         "examples": ['ygg work "add more functionality to theme selector in personal website"'],
         "next": ["suggest", "root", "status"],
+    },
+    "paths": {
+        "purpose": "Inspect or validate path-contract resolution for Ygg/OpenClaw roots.",
+        "when_to_use": [
+            "When verifying host portability and path wiring.",
+            "When debugging workspace/control-plane path drift.",
+        ],
+        "examples": ["ygg paths", "ygg paths check", "ygg paths check --json"],
+        "next": ["status", "work"],
     },
     "root": {
         "purpose": "Force direct planner-spine entry with no aggressive route guess.",
@@ -140,6 +160,38 @@ EXPLAIN_CARDS = {
         "examples": ["ygg status", "ygg status website-dev"],
         "next": ["suggest", "resume", "branch"],
     },
+    "raven": {
+        "purpose": "Run RAVENS v1 flight operations (launch/status/inspect/return).",
+        "when_to_use": [
+            "When you want inspectable roaming-cognition flights.",
+            "When you need a governed return packet tied to evidence.",
+        ],
+        "examples": [
+            'ygg raven launch --trigger human-request "Inspect env for package drift"',
+            "ygg raven status",
+            "ygg raven inspect <flight-id>",
+            "ygg raven return <flight-id>",
+        ],
+        "next": ["graft", "beak", "status"],
+    },
+    "graft": {
+        "purpose": "Propose additive structural growth artifacts (proposal only).",
+        "when_to_use": [
+            "When adding new branches/protocols/adapters to Ygg.",
+            "When recording a lawful-growth proposal from raven findings.",
+        ],
+        "examples": ['ygg graft propose "Add proposal gate protocol" --target-attachment state/policy/'],
+        "next": ["raven", "status"],
+    },
+    "beak": {
+        "purpose": "Propose subtractive/reshaping actions (proposal only; no execution).",
+        "when_to_use": [
+            "When identifying deadwood/duplication/drift for potential pruning.",
+            "When you need a structured soft/hard beak proposal for governance.",
+        ],
+        "examples": ['ygg beak propose "Deprecate duplicate lane docs" --target code/docs/ --problem-type duplication'],
+        "next": ["raven", "status"],
+    },
 }
 
 VERB_CONTRACTS = {
@@ -167,6 +219,15 @@ VERB_CONTRACTS = {
         "calls": ["scripts/work.py"],
         "guarantees": ["forwards arguments verbatim to the workspace work wrapper"],
         "fails_when": ["workspace work script is missing or exits non-zero"],
+    },
+    "paths": {
+        "mutates_state": False,
+        "requires": [],
+        "optional": ["show|check", "--paths-file", "--json"],
+        "writes": [],
+        "calls": ["path_contract.resolve_runtime_paths", "path_contract.validate_runtime_paths"],
+        "guarantees": ["shows resolved paths and supports validation checks"],
+        "fails_when": ["check mode returns non-zero when required paths are invalid"],
     },
     "root": {
         "mutates_state": "indirect",
@@ -243,7 +304,7 @@ VERB_CONTRACTS = {
         "mutates_state": True,
         "requires": ["domain", "task", "--disposition"],
         "optional": ["--note", "--artifact (repeatable)", "--finish", "--dry-run"],
-        "writes": ["~/ygg/state/promotions.jsonl", "~/ygg/notes/promotions.md", "workspace resume baton (optional)"],
+        "writes": ["~/ygg/state/runtime/promotions.jsonl", "~/ygg/state/notes/promotions.md", "workspace resume baton (optional)"],
         "calls": ["scripts/resume.py checkpoint (log-daily)", "scripts/resume.py finish (--finish)"],
         "guarantees": [
             "records explicit disposition event with timestamp",
@@ -262,6 +323,44 @@ VERB_CONTRACTS = {
         "calls": ["scripts/resume.py status"],
         "guarantees": ["prints current domain/task baton summary"],
         "fails_when": ["resume status command exits non-zero"],
+    },
+    "raven": {
+        "mutates_state": True,
+        "requires": ["subcommand"],
+        "optional": ["launch|status|inspect|return", "--json"],
+        "writes": [
+            "~/ygg/state/runtime/ravens/flights/*.json",
+            "~/ygg/state/runtime/ravens/logs/*.jsonl",
+            "~/ygg/state/runtime/ravens/returns/*.md",
+        ],
+        "calls": ["ravens_v1.launch_flight", "ravens_v1.list_flights", "ravens_v1.create_return_packet"],
+        "guarantees": [
+            "flight launch records at least commissioned + launched events",
+            "status/inspect expose persisted flight state",
+            "return creates a structured markdown packet",
+        ],
+        "fails_when": [
+            "flight id is unknown for inspect/return",
+            "return file exists and --force is not provided",
+        ],
+    },
+    "graft": {
+        "mutates_state": True,
+        "requires": ["propose", "title"],
+        "optional": ["--target-attachment", "--why-now", "--risk-class", "--source-flight", "--json"],
+        "writes": ["~/ygg/state/runtime/ravens/grafts/GRAFT-*.md"],
+        "calls": ["ravens_v1.propose_graft"],
+        "guarantees": ["creates proposal artifact only (no automatic execution)"],
+        "fails_when": ["proposal id exists and --force is not provided"],
+    },
+    "beak": {
+        "mutates_state": True,
+        "requires": ["propose", "title"],
+        "optional": ["--class soft|hard", "--target", "--problem-type", "--evidence", "--json"],
+        "writes": ["~/ygg/state/runtime/ravens/beaks/BEAK-*.md"],
+        "calls": ["ravens_v1.propose_beak"],
+        "guarantees": ["creates beak proposal artifact only (no destructive execution)"],
+        "fails_when": ["proposal id exists and --force is not provided"],
     },
 }
 
@@ -951,6 +1050,170 @@ def cmd_paths(args: argparse.Namespace) -> int:
     return 0 if check.get("ok") else 1
 
 
+def _print_raven_status(rows: list[dict]) -> None:
+    print("RAVENS flights\n")
+    if not rows:
+        print("(no flights)")
+        return
+
+    for row in rows:
+        actors = ",".join(row.get("actors") or [])
+        print(
+            f"- {row.get('id')} [{row.get('status', 'unknown')}] "
+            f"trigger={row.get('trigger', '?')} actors={actors or '?'} "
+            f"updated={row.get('updatedAt', row.get('createdAt', '?'))}"
+        )
+        print(f"  purpose: {row.get('purpose', '')}")
+
+
+def cmd_raven_launch(args: argparse.Namespace) -> int:
+    purpose = _compact(" ".join(args.purpose))
+    if not purpose:
+        raise SystemExit("`ygg raven launch` requires a purpose.")
+
+    flight = launch_flight(
+        state_runtime_dir=RAVEN_STATE_DIR,
+        purpose=purpose,
+        trigger=_slugify(args.trigger),
+        actors=parse_actors(args.actors),
+        initiated_by=_slugify(args.initiated_by),
+        flight_id=args.flight_id,
+    )
+
+    if args.json:
+        print(json.dumps(flight, indent=2, ensure_ascii=False))
+        return 0
+
+    print("RAVENS launch")
+    print(f"- id: {flight['id']}")
+    print(f"- status: {flight['status']}")
+    print(f"- trigger: {flight['trigger']}")
+    print(f"- actors: {', '.join(flight['actors'])}")
+    print(f"- purpose: {flight['purpose']}")
+    print(f"- log: {flight['logFile']}")
+    return 0
+
+
+def cmd_raven_status(args: argparse.Namespace) -> int:
+    rows = list_flights(RAVEN_STATE_DIR)
+    if args.limit:
+        rows = rows[: args.limit]
+
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+
+    _print_raven_status(rows)
+    return 0
+
+
+def cmd_raven_inspect(args: argparse.Namespace) -> int:
+    try:
+        payload = load_flight(RAVEN_STATE_DIR, args.flight_id)
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_raven_return(args: argparse.Namespace) -> int:
+    try:
+        payload = create_return_packet(
+            state_runtime_dir=RAVEN_STATE_DIR,
+            flight_id=args.flight_id,
+            claim_tier=args.claim_tier,
+            adjudication=args.adjudication,
+            promotion=args.promotion,
+            evidence=args.evidence or [],
+            recommendation=args.recommendation or "",
+            failure_conditions=args.failure_condition or [],
+            overwrite=args.force,
+        )
+    except (FileNotFoundError, FileExistsError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    print("RAVENS return")
+    print(f"- id: {payload['id']}")
+    print(f"- return file: {payload['returnFile']}")
+    print(f"- adjudication: {payload['adjudication']}")
+    print(f"- promotion: {payload['promotion']}")
+    return 0
+
+
+def cmd_graft_propose(args: argparse.Namespace) -> int:
+    title = _compact(" ".join(args.title))
+    if not title:
+        raise SystemExit("`ygg graft propose` requires a title.")
+
+    try:
+        payload = propose_graft(
+            state_runtime_dir=RAVEN_STATE_DIR,
+            title=title,
+            target_attachment=args.target_attachment,
+            why_now=args.why_now or "",
+            risk_class=args.risk_class,
+            source_flight=args.source_flight,
+            proposal_id=args.id,
+            overwrite=args.force,
+        )
+    except FileExistsError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    print("GRAFT proposal")
+    print(f"- id: {payload['id']}")
+    print(f"- title: {payload['title']}")
+    print(f"- target: {payload['targetAttachment']}")
+    print(f"- risk: {payload['riskClass']}")
+    print(f"- file: {payload['file']}")
+    return 0
+
+
+def cmd_beak_propose(args: argparse.Namespace) -> int:
+    title = _compact(" ".join(args.title))
+    if not title:
+        raise SystemExit("`ygg beak propose` requires a title.")
+
+    try:
+        payload = propose_beak(
+            state_runtime_dir=RAVEN_STATE_DIR,
+            title=title,
+            beak_class=args.beak_class,
+            target=args.target,
+            problem_type=args.problem_type,
+            evidence=args.evidence or [],
+            source_flight=args.source_flight,
+            proposal_id=args.id,
+            overwrite=args.force,
+        )
+    except FileExistsError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    print("BEAK proposal")
+    print(f"- id: {payload['id']}")
+    print(f"- class: {payload['class']}")
+    print(f"- target: {payload['target']}")
+    print(f"- problem: {payload['problemType']}")
+    print(f"- file: {payload['file']}")
+    return 0
+
+
 def cmd_branch(args: argparse.Namespace) -> int:
     domain = _slugify(args.domain)
     task = _slugify(args.task)
@@ -1115,6 +1378,84 @@ def build_parser() -> argparse.ArgumentParser:
     paths_p.add_argument("--paths-file", help="Explicit path-contract file path")
     paths_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     paths_p.set_defaults(func=cmd_paths)
+
+    raven_p = sub.add_parser("raven", help="RAVENS v1 flight operations")
+    raven_sub = raven_p.add_subparsers(dest="raven_cmd", required=True)
+
+    raven_launch_p = raven_sub.add_parser("launch", help="Launch a raven flight")
+    raven_launch_p.add_argument("purpose", nargs="+", help="Flight purpose/objective")
+    raven_launch_p.add_argument("--trigger", default="human-request", help="Trigger type (default: human-request)")
+    raven_launch_p.add_argument("--actors", default="huginn,muninn", help="Comma/space-separated actors (default: huginn,muninn)")
+    raven_launch_p.add_argument("--initiated-by", default="spine", help="Initiator id (default: spine)")
+    raven_launch_p.add_argument("--flight-id", help="Optional explicit flight id")
+    raven_launch_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_launch_p.set_defaults(func=cmd_raven_launch)
+
+    raven_status_p = raven_sub.add_parser("status", help="List known raven flights")
+    raven_status_p.add_argument("--limit", type=int, default=20, help="Max flights to show (default: 20)")
+    raven_status_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_status_p.set_defaults(func=cmd_raven_status)
+
+    raven_inspect_p = raven_sub.add_parser("inspect", help="Inspect one raven flight by id")
+    raven_inspect_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
+    raven_inspect_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_inspect_p.set_defaults(func=cmd_raven_inspect)
+
+    raven_return_p = raven_sub.add_parser("return", help="Create a structured return packet for a flight")
+    raven_return_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
+    raven_return_p.add_argument("--claim-tier", default="defensible-now", help="Claim tier label (default: defensible-now)")
+    raven_return_p.add_argument(
+        "--adjudication",
+        default="PARK",
+        choices=["REJECT", "PARK", "TRIAL", "ADOPT", "ESCALATE_HITL"],
+        help="Spine adjudication class",
+    )
+    raven_return_p.add_argument(
+        "--promotion",
+        default="LOG_DAILY",
+        choices=["NO_PROMOTE", "LOG_DAILY", "PROMOTE_DURABLE", "ESCALATE_HITL"],
+        help="Promotion/disposition class",
+    )
+    raven_return_p.add_argument("--evidence", action="append", help="Evidence reference (repeatable)")
+    raven_return_p.add_argument("--failure-condition", action="append", help="Failure condition bullet (repeatable)")
+    raven_return_p.add_argument("--recommendation", help="Recommendation summary text")
+    raven_return_p.add_argument("--force", action="store_true", help="Overwrite return file if it already exists")
+    raven_return_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_return_p.set_defaults(func=cmd_raven_return)
+
+    graft_p = sub.add_parser("graft", help="Propose additive structural growth artifacts")
+    graft_sub = graft_p.add_subparsers(dest="graft_cmd", required=True)
+
+    graft_propose_p = graft_sub.add_parser("propose", help="Create a graft proposal artifact")
+    graft_propose_p.add_argument("title", nargs="+", help="Proposal title")
+    graft_propose_p.add_argument("--target-attachment", default="state/policy/", help="Attachment point path/area")
+    graft_propose_p.add_argument("--why-now", help="Why this graft is needed now")
+    graft_propose_p.add_argument("--risk-class", default="medium", help="Risk class (default: medium)")
+    graft_propose_p.add_argument("--source-flight", help="Optional source raven flight id")
+    graft_propose_p.add_argument("--id", help="Optional explicit proposal id")
+    graft_propose_p.add_argument("--force", action="store_true", help="Overwrite artifact if id already exists")
+    graft_propose_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    graft_propose_p.set_defaults(func=cmd_graft_propose)
+
+    beak_p = sub.add_parser("beak", help="Propose subtractive/reshaping actions (proposal-only)")
+    beak_sub = beak_p.add_subparsers(dest="beak_cmd", required=True)
+
+    beak_propose_p = beak_sub.add_parser("propose", help="Create a beak proposal artifact")
+    beak_propose_p.add_argument("title", nargs="+", help="Proposal title")
+    beak_propose_p.add_argument("--class", dest="beak_class", choices=["soft", "hard"], default="soft", help="Beak class (default: soft)")
+    beak_propose_p.add_argument("--target", default="<target>", help="Target structure/path")
+    beak_propose_p.add_argument(
+        "--problem-type",
+        choices=["rot", "duplication", "drift", "deadwood", "misgrowth"],
+        default="drift",
+        help="Problem class (default: drift)",
+    )
+    beak_propose_p.add_argument("--evidence", action="append", help="Evidence reference (repeatable)")
+    beak_propose_p.add_argument("--source-flight", help="Optional source raven flight id")
+    beak_propose_p.add_argument("--id", help="Optional explicit proposal id")
+    beak_propose_p.add_argument("--force", action="store_true", help="Overwrite artifact if id already exists")
+    beak_propose_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    beak_propose_p.set_defaults(func=cmd_beak_propose)
 
     root_p = sub.add_parser("root", help="Force direct planner-spine entry with no route guess")
     root_p.add_argument("request", nargs="*", help="Optional context text for the planner")

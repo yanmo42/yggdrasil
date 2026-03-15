@@ -49,17 +49,18 @@ So this is a **packaged control plane** with a live dependency on the canonical 
 
 1. `code/docs/NORTH-STAR.md`
 2. `code/docs/RAVENS.md`
-3. `code/docs/VOCAB.md`
-4. `code/docs/VERBS.md`
-5. `code/docs/CONTRACTS.md`
-6. `code/docs/CONTINUITY-OPS-V1.md`
-7. `code/docs/RUNNING.md`
-8. `code/docs/ARCHITECTURE.md`
-9. `code/docs/ROADMAP.md`
-10. `SECURITY.md`
-11. `code/src/cli.py`
-12. `machine/bootstrap-host.sh`
-13. `state/policy/STATE-BOUNDARY.md`
+3. `code/docs/RAVENS-V1.md`
+4. `code/docs/VOCAB.md`
+5. `code/docs/VERBS.md`
+6. `code/docs/CONTRACTS.md`
+7. `code/docs/CONTINUITY-OPS-V1.md`
+8. `code/docs/RUNNING.md`
+9. `code/docs/ARCHITECTURE.md`
+10. `code/docs/ROADMAP.md`
+11. `SECURITY.md`
+12. `code/src/cli.py`
+13. `machine/bootstrap-host.sh`
+14. `state/policy/STATE-BOUNDARY.md`
 
 ## Current CLI status
 
@@ -75,6 +76,9 @@ Current verbs:
 - `ygg suggest`
 - `ygg work`
 - `ygg paths` (path-contract show/check)
+- `ygg raven` (launch/status/inspect/return)
+- `ygg graft` (propose)
+- `ygg beak` (propose)
 - `ygg root`
 - `ygg branch`
 - `ygg resume`
@@ -89,6 +93,7 @@ ygg --help
 ygg explain suggest
 ygg help promote
 ygg paths check
+ygg raven launch "inspect environment drift"
 ygg suggest "implement the improved theme selector UX"
 ygg status
 ygg root "help me decide the next move"
