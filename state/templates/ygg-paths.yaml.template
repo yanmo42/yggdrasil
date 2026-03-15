@@ -1,0 +1,28 @@
+schema: ygg-paths/v1
+profile: <profile-name>
+updated_on: <YYYY-MM-DD>
+
+# Canonical path registry for Ygg/OpenClaw local operations.
+# Rule: automation resolves roots from this file first.
+
+paths:
+  spine:
+    root: <ABS_PATH_TO_OPENCLAW_WORKSPACE>
+    config_dir: <ABS_PATH_TO_OPENCLAW_WORKSPACE>/config
+    memory_dir: <ABS_PATH_TO_OPENCLAW_WORKSPACE>/memory
+    backups_dir: <ABS_PATH_TO_OPENCLAW_WORKSPACE>/backups
+
+  control_plane:
+    name: ygg
+    root: <ABS_PATH_TO_YGG_ROOT>
+    bin: <ABS_PATH_TO_YGG_ROOT>/bin/ygg
+
+  work_repos:
+    root: <ABS_PATH_TO_PROJECTS_ROOT>
+    sandy-chaos: <ABS_PATH_TO_SANDY_CHAOS_REPO>
+    ianmoog-site: <ABS_PATH_TO_IANMOOG_SITE_REPO>
+
+contracts:
+  canonical_state_owner: spine
+  canonical_path_registry: <ABS_PATH_TO_OPENCLAW_WORKSPACE>/config/ygg-paths.yaml
+  branch_backflow: "Durable outcomes from repos should be promoted back into spine memory/state."

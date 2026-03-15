@@ -23,6 +23,7 @@ So:
 ## Recommended verb family
 
 - `ygg explain` — self-teaching vocabulary for Ygg verbs
+- `ygg help` — alias of `explain` for shell-native discoverability
 - `ygg suggest` — translate natural-language intent into candidate Ygg commands
 - `ygg work` — natural-language front door
 - `ygg root` — force planner spine / no routing guess

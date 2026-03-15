@@ -15,28 +15,29 @@ This directory exists to make the system easier to understand, inspect, and evol
 
 ## Important current reality
 
-This is a **clean scaffold and documentation home**.
-The current authoritative implementation still lives in:
+Ygg is now split into three package surfaces:
+
+- `code/` — CLI code, tests, docs
+- `machine/` — host bootstrap/setup scripts
+- `state/` — state templates/policy + runtime output area
+
+The planner/resume internals still depend on assistant-home modules in:
 
 - `~/.openclaw/workspace-claw-main/scripts/work.py`
 - `~/.openclaw/workspace-claw-main/tools/work_v1/`
 - `~/.openclaw/workspace-claw-main/scripts/resume.py`
 - `~/.openclaw/workspace-claw-main/state/resume/`
 
-This means:
-
-- `~/ygg` is the best place to **follow along**
-- the existing workspace remains the current source of truth
-- a future migration into `~/ygg/src/` can happen once the vocabulary/spec settles
+So this is a **packaged control plane** with a live dependency on the canonical spine workspace.
 
 ## Layout
 
-- `bin/` — entrypoint scripts
-- `src/` — Ygg CLI/source code
-- `docs/` — architecture, vocabulary, verb semantics, running instructions, roadmap
-- `state/` — Ygg-local machine-readable records (created on demand)
-- `links/` — symlinks to current implementation in assistant-home
-- `notes/` — scratch notes and human-readable promotion records
+- `code/` — portable CLI package (`code/src`, `code/bin`, `code/tests`, `code/docs`)
+- `machine/` — portable host bootstrap package (`machine/bootstrap-host.sh`)
+- `state/` — templates/policy + runtime state boundary (`state/templates`, `state/policy`, `state/runtime`)
+- `bin/` — compatibility launcher shim (`bin/ygg` -> `code/bin/ygg`)
+- `src/`, `tests/`, `docs/` — compatibility symlinks to `code/*`
+- `links/` — local symlinks to assistant-home implementation pointers
 
 ## Naming
 
@@ -46,14 +47,19 @@ This means:
 
 ## First files to read
 
-1. `docs/VOCAB.md`
-2. `docs/VERBS.md`
-3. `docs/RUNNING.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/ROADMAP.md`
-6. `SECURITY.md`
-7. `src/cli.py`
-8. `links/`
+1. `code/docs/NORTH-STAR.md`
+2. `code/docs/RAVENS.md`
+3. `code/docs/VOCAB.md`
+4. `code/docs/VERBS.md`
+5. `code/docs/CONTRACTS.md`
+6. `code/docs/CONTINUITY-OPS-V1.md`
+7. `code/docs/RUNNING.md`
+8. `code/docs/ARCHITECTURE.md`
+9. `code/docs/ROADMAP.md`
+10. `SECURITY.md`
+11. `code/src/cli.py`
+12. `machine/bootstrap-host.sh`
+13. `state/policy/STATE-BOUNDARY.md`
 
 ## Current CLI status
 
@@ -65,8 +71,10 @@ A usable prototype entrypoint exists at:
 Current verbs:
 
 - `ygg explain`
+- `ygg help` (alias of `explain`)
 - `ygg suggest`
 - `ygg work`
+- `ygg paths` (path-contract show/check)
 - `ygg root`
 - `ygg branch`
 - `ygg resume`
@@ -79,6 +87,8 @@ Current verbs:
 ```bash
 ygg --help
 ygg explain suggest
+ygg help promote
+ygg paths check
 ygg suggest "implement the improved theme selector UX"
 ygg status
 ygg root "help me decide the next move"

@@ -1,13 +1,19 @@
 # Bytecode / caches
-__pycache__/
+**/__pycache__/
 *.py[cod]
 
 # Local machine pointers (not portable/public)
 links/
 
-# Local runtime state/logs
-state/
-notes/promotions.md
+# Runtime state/logs (generated)
+state/runtime/
+state/notes/
+
+# Local secret/env overlays
+*.env
+*.local
+*.key
+*.pem
 
 # OS/editor noise
 .DS_Store

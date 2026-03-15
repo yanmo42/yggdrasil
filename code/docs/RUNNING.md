@@ -49,9 +49,10 @@ Right now Ygg is a thin control surface over the current assistant-home implemen
 ### Human-facing Ygg home
 
 - `~/ygg/README.md`
-- `~/ygg/docs/`
-- `~/ygg/src/cli.py`
-- `~/ygg/bin/ygg`
+- `~/ygg/code/docs/`
+- `~/ygg/code/src/cli.py`
+- `~/ygg/bin/ygg` (compat launcher)
+- `~/ygg/machine/bootstrap-host.sh`
 
 ### Current authoritative implementation
 
@@ -69,6 +70,7 @@ This means Ygg is the clean front door, while some implementation still lives in
 ```bash
 ygg explain
 ygg explain suggest
+ygg help promote
 ygg explain promote --json
 ```
 
@@ -85,6 +87,14 @@ ygg suggest --domain website-dev --task theme-selector-enhancements \
 ```bash
 ygg status
 ygg status website-dev
+```
+
+### Inspect/validate path contract
+
+```bash
+ygg paths
+ygg paths check
+ygg paths check --json
 ```
 
 ### Enter planner/work front door
@@ -135,6 +145,7 @@ Several verbs support non-mutating inspection modes:
 ```bash
 ygg suggest "implement the improved theme selector UX"
 ygg suggest --json "implement the improved theme selector UX"
+ygg help suggest --json
 ygg root --print-packet "help me plan"
 ygg resume website-dev theme-selector-enhancements --print-only
 ygg branch demo-domain demo-task --dry-run
@@ -142,9 +153,17 @@ ygg forge --domain website-dev --task theme-selector-enhancements --print-packet
 ygg promote website-dev theme-selector-enhancements --disposition log-daily --dry-run
 ```
 
+## Contract smoke checks
+
+If you modify verb semantics or `ygg help/explain` payload shape:
+
+```bash
+python3 -m unittest discover -s ~/ygg/code/tests -p 'test_*.py' -v
+```
+
 ## When changes take effect
 
-Changes to Ygg usually take effect immediately because `ygg` resolves to `~/ygg/bin/ygg`, which calls `~/ygg/src/cli.py` directly.
+Changes to Ygg usually take effect immediately because `ygg` resolves to `~/ygg/bin/ygg`, which calls `~/ygg/code/src/cli.py` (via `code/bin/ygg`).
 
 In some shells, command-location caching may need a refresh after replacing executables:
 
@@ -159,11 +178,15 @@ Opening a new shell also works.
 Read these in order if you want the full model:
 
 1. `~/ygg/README.md`
-2. `~/ygg/docs/VOCAB.md`
-3. `~/ygg/docs/VERBS.md`
-4. `~/ygg/docs/ARCHITECTURE.md`
-5. `~/ygg/docs/ROADMAP.md`
-6. `~/ygg/SECURITY.md`
+2. `~/ygg/code/docs/NORTH-STAR.md`
+3. `~/ygg/code/docs/RAVENS.md`
+4. `~/ygg/code/docs/VOCAB.md`
+5. `~/ygg/code/docs/VERBS.md`
+6. `~/ygg/code/docs/CONTRACTS.md`
+7. `~/ygg/code/docs/CONTINUITY-OPS-V1.md`
+8. `~/ygg/code/docs/ARCHITECTURE.md`
+9. `~/ygg/code/docs/ROADMAP.md`
+10. `~/ygg/SECURITY.md`
 
 ## v1 limitations
 

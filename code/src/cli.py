@@ -10,13 +10,17 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
+
 HOME = Path.home()
-YGG_HOME = HOME / "ygg"
-WORKSPACE = HOME / ".openclaw" / "workspace-claw-main"
+RUNTIME_PATHS: RuntimePaths = resolve_runtime_paths()
+PATH_CONTRACT_FILE = RUNTIME_PATHS.contract_path
+YGG_HOME = RUNTIME_PATHS.control_plane_root
+WORKSPACE = RUNTIME_PATHS.spine_root
 WORK_SCRIPT = WORKSPACE / "scripts" / "work.py"
 RESUME_SCRIPT = WORKSPACE / "scripts" / "resume.py"
-STATE_DIR = YGG_HOME / "state"
-NOTES_DIR = YGG_HOME / "notes"
+STATE_DIR = YGG_HOME / "state" / "runtime"
+NOTES_DIR = YGG_HOME / "state" / "notes"
 PROMOTION_LOG_JSONL = STATE_DIR / "promotions.jsonl"
 PROMOTION_LOG_MD = NOTES_DIR / "promotions.md"
 DEFAULT_SESSION = "planner--main"
@@ -138,6 +142,129 @@ EXPLAIN_CARDS = {
     },
 }
 
+VERB_CONTRACTS = {
+    "suggest": {
+        "mutates_state": False,
+        "requires": ["request"],
+        "optional": ["--domain", "--task", "--json"],
+        "writes": [],
+        "calls": ["tools.work_v1.router.classify_request", "tools.work_v1.planner.load_active_tasks"],
+        "guarantees": [
+            "never executes suggested commands",
+            "prints a route interpretation with confidence and rationale",
+            "returns at least one concrete ygg command suggestion",
+        ],
+        "fails_when": [
+            "request is empty",
+            "workspace planner/router imports are unavailable",
+        ],
+    },
+    "work": {
+        "mutates_state": "indirect",
+        "requires": [],
+        "optional": ["request..."],
+        "writes": ["delegated to workspace work wrapper / planner session"],
+        "calls": ["scripts/work.py"],
+        "guarantees": ["forwards arguments verbatim to the workspace work wrapper"],
+        "fails_when": ["workspace work script is missing or exits non-zero"],
+    },
+    "root": {
+        "mutates_state": "indirect",
+        "requires": [],
+        "optional": ["request...", "--session", "--openclaw-bin", "--print-packet"],
+        "writes": ["planner message stream (unless --print-packet)"],
+        "calls": ["tools.work_v1.planner.build_planner_boot_packet", "openclaw tui --session ... --message ..."],
+        "guarantees": [
+            "route action is forced to stay_in_planner",
+            "does not auto-select branch/forge actions",
+        ],
+        "fails_when": [
+            "workspace planner imports are unavailable",
+            "OpenClaw TUI launch fails when not in --print-packet mode",
+        ],
+    },
+    "branch": {
+        "mutates_state": True,
+        "requires": ["domain", "task"],
+        "optional": [
+            "--objective",
+            "--current-state",
+            "--next-action",
+            "--status",
+            "--priority",
+            "--locked (repeatable)",
+            "--rejected (repeatable)",
+            "--reopen (repeatable)",
+            "--artifact (repeatable)",
+            "--agent",
+            "--dry-run",
+        ],
+        "writes": ["workspace resume baton files via resume checkpoint"],
+        "calls": ["scripts/resume.py checkpoint", "scripts/resume.py status"],
+        "guarantees": [
+            "normalizes domain/task ids to slug form",
+            "prints the resulting domain status after successful checkpoint",
+        ],
+        "fails_when": ["resume checkpoint command exits non-zero"],
+    },
+    "resume": {
+        "mutates_state": "indirect",
+        "requires": [],
+        "optional": ["domain", "task", "--semantic", "--max-chars", "--agent", "--openclaw-bin", "--print-only"],
+        "writes": ["planner message stream when launching"],
+        "calls": ["scripts/resume.py open"],
+        "guarantees": [
+            "resolves target from explicit args or sole active task",
+            "supports print-only packet inspection",
+        ],
+        "fails_when": [
+            "multiple active tasks exist and no explicit target is provided",
+            "target resolution is ambiguous",
+            "resume open command exits non-zero",
+        ],
+    },
+    "forge": {
+        "mutates_state": "indirect",
+        "requires": [],
+        "optional": ["request...", "--domain", "--task", "--session", "--openclaw-bin", "--print-packet"],
+        "writes": ["planner message stream (unless --print-packet)"],
+        "calls": ["tools.work_v1.planner.build_planner_boot_packet", "openclaw tui --session ... --message ..."],
+        "guarantees": [
+            "route action is forced to suggest_spawn_codex",
+            "target resolution requires an unambiguous active lane",
+        ],
+        "fails_when": [
+            "no active task is available and no target is provided",
+            "target resolution is ambiguous",
+            "OpenClaw TUI launch fails when not in --print-packet mode",
+        ],
+    },
+    "promote": {
+        "mutates_state": True,
+        "requires": ["domain", "task", "--disposition"],
+        "optional": ["--note", "--artifact (repeatable)", "--finish", "--dry-run"],
+        "writes": ["~/ygg/state/promotions.jsonl", "~/ygg/notes/promotions.md", "workspace resume baton (optional)"],
+        "calls": ["scripts/resume.py checkpoint (log-daily)", "scripts/resume.py finish (--finish)"],
+        "guarantees": [
+            "records explicit disposition event with timestamp",
+            "supports dry-run without writing",
+        ],
+        "fails_when": [
+            "disposition is omitted or invalid",
+            "follow-up resume checkpoint/finish command exits non-zero",
+        ],
+    },
+    "status": {
+        "mutates_state": False,
+        "requires": [],
+        "optional": ["domain"],
+        "writes": [],
+        "calls": ["scripts/resume.py status"],
+        "guarantees": ["prints current domain/task baton summary"],
+        "fails_when": ["resume status command exits non-zero"],
+    },
+}
+
 MATCH_STOPWORDS = {
     "the",
     "and",
@@ -173,9 +300,12 @@ def _now_iso() -> str:
 
 def _require_workspace_imports() -> None:
     if IMPORT_ERROR is not None:
+        contract_hint = str(PATH_CONTRACT_FILE) if PATH_CONTRACT_FILE else "(not found; using fallback paths)"
         raise SystemExit(
             "Ygg could not import the current workspace implementation. "
-            f"Expected modules under {WORKSPACE}. Original error: {IMPORT_ERROR}"
+            f"Expected modules under {WORKSPACE}. "
+            f"Path contract source: {contract_hint}. "
+            f"Original error: {IMPORT_ERROR}"
         )
 
 
@@ -470,6 +600,7 @@ def _suggestion_entry(command: str, why: str, *, primary: bool = False, executab
         "executable": executable,
         "verb": verb,
         "blurb": SUGGESTION_BLURBS.get(verb, ""),
+        "contract_ref": f"ygg help {verb}" if verb in EXPLAIN_CARDS else None,
     }
 
 
@@ -569,6 +700,10 @@ def _print_suggest_text(payload: dict[str, object]) -> None:
         print("\nprimary suggestion:")
         print(f"1. {primary['command']}")
         print(f"   why: {primary['why']}")
+        if primary.get("blurb"):
+            print(f"   posture: {primary['blurb']}")
+        if primary.get("contract_ref"):
+            print(f"   contract: {primary['contract_ref']}")
         if not primary.get("executable", True):
             print("   note: template command — fill in the placeholder values first.")
 
@@ -577,6 +712,10 @@ def _print_suggest_text(payload: dict[str, object]) -> None:
         for idx, item in enumerate(alternatives, start=2 if primary else 1):
             print(f"{idx}. {item['command']}")
             print(f"   why: {item['why']}")
+            if item.get("blurb"):
+                print(f"   posture: {item['blurb']}")
+            if item.get("contract_ref"):
+                print(f"   contract: {item['contract_ref']}")
             if not item.get("executable", True):
                 print("   note: template command — fill in the placeholder values first.")
 
@@ -589,8 +728,8 @@ def _print_suggest_text(payload: dict[str, object]) -> None:
             )
 
 
-def _print_explain_card(verb: str, card: dict[str, object]) -> None:
-    print(f"ygg explain {verb}\n")
+def _print_explain_card(verb: str, card: dict[str, object], contract: dict[str, object], *, invoked_as: str = "explain") -> None:
+    print(f"ygg {invoked_as} {verb}\n")
     print(f"purpose: {card['purpose']}")
 
     when_to_use = card.get("when_to_use") or []
@@ -598,6 +737,33 @@ def _print_explain_card(verb: str, card: dict[str, object]) -> None:
         print("\nwhen to use:")
         for item in when_to_use:
             print(f"- {item}")
+
+    print("\ncontract:")
+    print(f"- mutates state: {contract.get('mutates_state')}")
+
+    requires = contract.get("requires") or []
+    if requires:
+        print("- required inputs:")
+        for item in requires:
+            print(f"  - {item}")
+
+    optional = contract.get("optional") or []
+    if optional:
+        print("- optional flags/inputs:")
+        for item in optional:
+            print(f"  - {item}")
+
+    guarantees = contract.get("guarantees") or []
+    if guarantees:
+        print("- guarantees:")
+        for item in guarantees:
+            print(f"  - {item}")
+
+    fails_when = contract.get("fails_when") or []
+    if fails_when:
+        print("- fails when:")
+        for item in fails_when:
+            print(f"  - {item}")
 
     examples = card.get("examples") or []
     if examples:
@@ -612,21 +778,30 @@ def _print_explain_card(verb: str, card: dict[str, object]) -> None:
 
 
 def cmd_explain(args: argparse.Namespace) -> int:
+    invoked_as = getattr(args, "invoked_as", "explain")
     if not args.verb:
         verbs = sorted(EXPLAIN_CARDS.keys())
         payload = {
-            "verbs": verbs,
-            "hint": "Run `ygg explain <verb>` for details.",
+            "verbs": [
+                {
+                    "verb": v,
+                    "purpose": EXPLAIN_CARDS[v]["purpose"],
+                    "mutates_state": VERB_CONTRACTS.get(v, {}).get("mutates_state"),
+                }
+                for v in verbs
+            ],
+            "hint": f"Run `ygg {invoked_as} <verb>` for details.",
         }
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0
 
-        print("Ygg explain\n")
+        print(f"Ygg {invoked_as}\n")
         print("known verbs:")
         for v in verbs:
-            print(f"- {v}: {EXPLAIN_CARDS[v]['purpose']}")
-        print("\nRun `ygg explain <verb>` for full details.")
+            mutates = VERB_CONTRACTS.get(v, {}).get("mutates_state")
+            print(f"- {v}: {EXPLAIN_CARDS[v]['purpose']} (mutates_state={mutates})")
+        print(f"\nRun `ygg {invoked_as} <verb>` for full details.")
         return 0
 
     verb = _slugify(args.verb)
@@ -638,12 +813,13 @@ def cmd_explain(args: argparse.Namespace) -> int:
     payload = {
         "verb": verb,
         **card,
+        "contract": VERB_CONTRACTS.get(verb, {}),
     }
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
 
-    _print_explain_card(verb, card)
+    _print_explain_card(verb, card, VERB_CONTRACTS.get(verb, {}), invoked_as=invoked_as)
     return 0
 
 
@@ -696,7 +872,11 @@ def cmd_suggest(args: argparse.Namespace) -> int:
 
 
 def cmd_work(args: argparse.Namespace) -> int:
-    return _run([sys.executable, str(WORK_SCRIPT), *args.request])
+    cmd = [sys.executable, str(WORK_SCRIPT)]
+    if PATH_CONTRACT_FILE is not None:
+        cmd.extend(["--paths-file", str(PATH_CONTRACT_FILE)])
+    cmd.extend(args.request)
+    return _run(cmd)
 
 
 def cmd_root(args: argparse.Namespace) -> int:
@@ -717,6 +897,58 @@ def cmd_status(args: argparse.Namespace) -> int:
     if args.domain:
         cmd.append(_slugify(args.domain))
     return _run(cmd)
+
+
+def _print_paths_text(payload: dict[str, object], check: dict[str, object] | None = None) -> None:
+    contract = payload["contract"]
+    resolved = payload["resolved"]
+
+    print("Ygg path contract\n")
+    print(f"contract loaded: {'yes' if contract.get('loaded') else 'no'}")
+    print(f"contract path: {contract.get('path')}")
+
+    parse_error = contract.get("parse_error")
+    if parse_error:
+        print(f"parse error: {parse_error}")
+
+    print("\nresolved paths:")
+    print(f"- spine root: {resolved.get('spine_root')}")
+    print(f"- control plane root: {resolved.get('control_plane_root')}")
+    print(f"- control plane bin: {resolved.get('control_plane_bin')}")
+    print(f"- work repos root: {resolved.get('work_repos_root')}")
+
+    if check is not None:
+        print(f"\ncheck: {'ok' if check.get('ok') else 'failed'}")
+        errors = check.get("errors") or []
+        warnings = check.get("warnings") or []
+        if errors:
+            print("errors:")
+            for item in errors:
+                print(f"- {item}")
+        if warnings:
+            print("warnings:")
+            for item in warnings:
+                print(f"- {item}")
+
+
+def cmd_paths(args: argparse.Namespace) -> int:
+    runtime = resolve_runtime_paths(args.paths_file)
+    payload = runtime_payload(runtime)
+
+    if args.action == "show":
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
+        _print_paths_text(payload)
+        return 0
+
+    check = validate_runtime_paths(runtime)
+    payload["check"] = check
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        _print_paths_text(payload, check=check)
+    return 0 if check.get("ok") else 1
 
 
 def cmd_branch(args: argparse.Namespace) -> int:
@@ -860,7 +1092,12 @@ def build_parser() -> argparse.ArgumentParser:
     explain_p = sub.add_parser("explain", help="Self-teaching vocabulary: explain what a Ygg verb does")
     explain_p.add_argument("verb", nargs="?", help="Verb to explain (e.g. suggest, branch, promote)")
     explain_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
-    explain_p.set_defaults(func=cmd_explain)
+    explain_p.set_defaults(func=cmd_explain, invoked_as="explain")
+
+    help_p = sub.add_parser("help", help="Alias for `ygg explain`")
+    help_p.add_argument("verb", nargs="?", help="Verb to explain (e.g. suggest, branch, promote)")
+    help_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    help_p.set_defaults(func=cmd_explain, invoked_as="help")
 
     suggest_p = sub.add_parser("suggest", help="Translate natural-language intent into candidate Ygg commands")
     suggest_p.add_argument("request", nargs="+", help="Freeform natural-language request")
@@ -872,6 +1109,12 @@ def build_parser() -> argparse.ArgumentParser:
     work_p = sub.add_parser("work", help="Natural-language front door into the planner-aware work wrapper")
     work_p.add_argument("request", nargs="*", help="Freeform request text")
     work_p.set_defaults(func=cmd_work)
+
+    paths_p = sub.add_parser("paths", help="Show or validate path-contract resolution")
+    paths_p.add_argument("action", nargs="?", choices=["show", "check"], default="show", help="show (default) or check")
+    paths_p.add_argument("--paths-file", help="Explicit path-contract file path")
+    paths_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    paths_p.set_defaults(func=cmd_paths)
 
     root_p = sub.add_parser("root", help="Force direct planner-spine entry with no route guess")
     root_p.add_argument("request", nargs="*", help="Optional context text for the planner")

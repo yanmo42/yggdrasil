@@ -11,6 +11,8 @@ That means:
 - the ontology may be symbolic (`spine`, `branch`, `promotion`)
 - the verbs should still tell the truth about what they do
 
+For the strict per-verb input/output/mutation guarantees, see `docs/CONTRACTS.md`.
+
 ---
 
 ## `ygg work`
@@ -46,6 +48,8 @@ Self-teaching vocabulary layer for Ygg verbs.
   - `ygg explain` (lists known verbs)
   - `ygg explain <verb>` (full card)
   - `ygg explain --json` / `ygg explain <verb> --json`
+  - `ygg help` / `ygg help <verb>` as a direct alias
+- includes contract details (mutability, required inputs, guarantees, failure conditions)
 - does not execute any work commands
 
 ### Use when
@@ -71,6 +75,7 @@ Translate natural-language intent into candidate Ygg commands without executing 
 - interprets the request using the current router heuristics and active baton state
 - prints a route interpretation (`action`, `confidence`, `reason`, and optional target)
 - prints a **primary suggested command** plus a few good alternatives
+- includes quick posture blurbs + `ygg help <verb>` contract pointers for each suggestion
 - shows active tasks for context
 - supports `--json` for machine-readable output
 - supports optional `--domain` / `--task` hints to sharpen the command suggestions

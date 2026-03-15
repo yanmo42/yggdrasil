@@ -55,8 +55,11 @@ Goal: reduce command-structure burden on the human without losing inspectability
 - [x] add natural-language guidance layer that can translate fuzzy intent into suggested Ygg commands (`ygg suggest`)
 - [ ] add response cards / suggested next commands after major actions
 - [x] add `ygg explain <verb>` affordances
-- [ ] add `ygg help <verb>` affordances
+- [x] add `ygg help <verb>` affordances
+- [ ] add a per-command plain-English Q&A section for specialized contexts ("how would this command work for X?")
 - [ ] explore lightweight TUI/GUI as an optional interface, not a requirement
+- [ ] prototype branch topology visualization in 2D as an inspectable interface layer
+- [ ] explore AR/VR branch visualization once 2D semantics are stable
 - [ ] preserve deterministic underlying commands even when the surface becomes more conversational
 - [ ] design the interface as a human/machine hybrid workflow rather than a one-sided automation shell
 
