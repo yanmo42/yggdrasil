@@ -1,0 +1,65 @@
+#!/bin/sh
+# ygg v1: Huginn outward transform
+# Launch a raven flight (scout or courier)
+
+set -e
+
+USAGE="Usage: ygg raven launch <flight-name> <type> [--trigger <trigger>] [--purpose <purpose>]"
+if [ "$#" -lt 2 ]; then
+  echo "$USAGE"
+  exit 1
+fi
+
+NAME="$1"
+TYPE="$2"
+shift 2
+
+TRIGGER="human-request"
+PURPOSE="Scouting mission for: $NAME"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --trigger) TRIGGER="$2"; shift 2 ;;
+    --purpose) PURPOSE="$2"; shift 2 ;;
+    *) echo "Unknown param: $1"; exit 1 ;;
+  esac
+done
+
+if [ "$TYPE" != "scout" ] && [ "$TYPE" != "courier" ]; then
+  echo "Type must be 'scout' or 'courier'."
+  exit 1
+fi
+
+# Flight ID: RAVEN-YYYY-MM-DD-HHMMSS-RAND
+TS="$(date +'%Y-%m-%dT%H:%M:%S%z')"
+RAND="$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+FLIGHT_ID="RAVEN-$(date +'%Y-%m-%d-%H%M%S')-$RAND"
+
+# Runtime paths
+RUN_DIR="$HOME/ygg/state/runtime/ravens"
+FLIGHT_DIR="$RUN_DIR/flights/$FLIGHT_ID"
+LOG_DIR="$RUN_DIR/logs"
+AVIARY_DIR="$RUN_DIR/aviary"
+mkdir -p "$FLIGHT_DIR" "$LOG_DIR" "$AVIARY_DIR"
+
+# Manifest record
+cat > "$FLIGHT_DIR/manifest.json" <<EOF
+{
+  "id": "$FLIGHT_ID",
+  "name": "$NAME",
+  "type": "$TYPE",
+  "trigger": "$TRIGGER",
+  "purpose": "$PURPOSE",
+  "launched_at": "$TS",
+  "state": "launched"
+}
+EOF
+
+# Huginn launch event (observable)
+cat >> "$LOG_DIR/ravens.jsonl" <<EOF
+{"event":"launch","flight_id":"$FLIGHT_ID","actor":"Huginn","timestamp":"$TS","type":"$TYPE","purpose":"$PURPOSE","trigger":"$TRIGGER"}
+EOF
+
+echo "Flight launched: $FLIGHT_ID (Huginn → outward)"
+echo "State dir: $FLIGHT_DIR"
+echo "Logs: tail -f $LOG_DIR/ravens.jsonl"

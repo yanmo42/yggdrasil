@@ -1,0 +1,60 @@
+#!/bin/sh
+# ygg v1: beak propose
+# Propose a beak (subtractive/reshaping action)
+
+set -e
+
+USAGE="Usage: ygg beak propose <target> <class> <description>"
+if [ "$#" -lt 3 ]; then
+  echo "$USAGE"
+  exit 1
+fi
+
+TARGET="$1"
+CLASS="$2"
+DESC="$3"
+
+if [ "$CLASS" != "soft" ] && [ "$CLASS" != "hard" ]; then
+  echo "Class must be 'soft' or 'hard'."
+  exit 1
+fi
+
+RUN_DIR="$HOME/ygg/state/runtime/ravens"
+BEAK_DIR="$RUN_DIR/beaks"
+mkdir -p "$BEAK_DIR"
+
+BEAK_ID="BEAK-$(date +'%Y-%m-%d-%H%M%S-$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n')')"
+TS="$(date +'%Y-%m-%dT%H:%M:%S%z')"
+
+cat > "$BEAK_DIR/$BEAK_ID.md" <<EOF
+# Beak Proposal: $BEAK_ID
+
+**ID**: $BEAK_ID  
+**Timestamp**: $TS  
+**Type**: Beak (subtractive/reshaping)  
+**Class**: $CLASS
+
+## Target
+$TARGET
+
+## Description
+$DESC
+
+## Problem Type
+[TBD: rot, duplication, drift, deadwood, misgrowth]
+
+## Suggested Action
+[TBD: mark, warn, archive, recommend, quarantine, deprecate (soft) or delete, disable, rewrite, prune aggressively, alter structurally irreversibly (hard)]
+
+## Reversibility
+[TBD: yes/no]
+
+## Approval Required
+${CLASS}
+
+## Failure If Not Done
+[TBD: what happens if we ignore this?]
+EOF
+
+echo "Beak proposal created: $BEAK_DIR/$BEAK_ID.md"
+echo "Next steps: fill in problem type, suggested action, etc., then request spine adjudication."
