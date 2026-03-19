@@ -299,6 +299,46 @@ def create_return_packet(
     }
 
 
+def adjudicate_flight(
+    *,
+    state_runtime_dir: Path,
+    flight_id: str,
+    disposition: str,
+) -> dict:
+    paths = ensure_raven_dirs(state_runtime_dir)
+    flight = load_flight(state_runtime_dir, flight_id)
+
+    now = _now_iso()
+    flight["status"] = disposition.lower()
+    flight["updatedAt"] = now
+    flight["adjudication"] = disposition
+    save_flight(state_runtime_dir, flight)
+
+    log_file = paths["logs"] / f"{flight_id}.jsonl"
+    _append_event(
+        log_file,
+        {
+            "id": f"{flight_id}::adjudicated",
+            "flightId": flight_id,
+            "phase": "adjudicated",
+            "actor": "spine",
+            "timestamp": now,
+            "trigger": flight.get("trigger", "unknown"),
+            "purpose": flight.get("purpose", ""),
+            "action": "adjudicate",
+            "target": disposition,
+            "notes": f"disposition={disposition}",
+        },
+    )
+
+    return {
+        "id": flight_id,
+        "status": flight["status"],
+        "adjudication": disposition,
+        "updatedAt": now,
+    }
+
+
 def propose_graft(
     *,
     state_runtime_dir: Path,

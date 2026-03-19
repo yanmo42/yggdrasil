@@ -9,4 +9,5 @@ if command -v readlink >/dev/null 2>&1; then
 fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
 YGG_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-exec "$YGG_ROOT/code/bin/ygg" "$@"
+export PYTHONPATH="$YGG_ROOT/lib${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m ygg.cli "$@"

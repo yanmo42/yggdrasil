@@ -104,8 +104,8 @@ def _unique(paths: list[Path]) -> list[Path]:
 
 def candidate_contract_paths() -> list[Path]:
     home = Path.home()
-    module_root = Path(__file__).resolve().parents[1]  # usually ~/ygg/code
-    repo_root = module_root.parent if module_root.name == "code" else module_root
+    module_root = Path(__file__).resolve().parents[1]  # usually ~/ygg/lib
+    repo_root = module_root.parent if module_root.name == "lib" else module_root
 
     paths: list[Path] = []
 

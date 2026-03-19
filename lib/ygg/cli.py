@@ -10,8 +10,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
-from ravens_v1 import (
+from ygg.path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
+from ygg.ravens_v1 import (
+    adjudicate_flight,
     create_return_packet,
     ensure_raven_dirs,
     launch_flight,
@@ -171,6 +172,7 @@ EXPLAIN_CARDS = {
             "ygg raven status",
             "ygg raven inspect <flight-id>",
             "ygg raven return <flight-id>",
+            "ygg raven adjudicate <flight-id> ADOPT",
         ],
         "next": ["graft", "beak", "status"],
     },
@@ -189,7 +191,7 @@ EXPLAIN_CARDS = {
             "When identifying deadwood/duplication/drift for potential pruning.",
             "When you need a structured soft/hard beak proposal for governance.",
         ],
-        "examples": ['ygg beak propose "Deprecate duplicate lane docs" --target code/docs/ --problem-type duplication'],
+        "examples": ['ygg beak propose "Deprecate duplicate lane docs" --target docs/ --problem-type duplication'],
         "next": ["raven", "status"],
     },
 }
@@ -327,20 +329,21 @@ VERB_CONTRACTS = {
     "raven": {
         "mutates_state": True,
         "requires": ["subcommand"],
-        "optional": ["launch|status|inspect|return", "--json"],
+        "optional": ["launch|status|inspect|return|adjudicate", "--json"],
         "writes": [
             "~/ygg/state/runtime/ravens/flights/*.json",
             "~/ygg/state/runtime/ravens/logs/*.jsonl",
             "~/ygg/state/runtime/ravens/returns/*.md",
         ],
-        "calls": ["ravens_v1.launch_flight", "ravens_v1.list_flights", "ravens_v1.create_return_packet"],
+        "calls": ["ravens_v1.launch_flight", "ravens_v1.list_flights", "ravens_v1.create_return_packet", "ravens_v1.adjudicate_flight"],
         "guarantees": [
             "flight launch records at least commissioned + launched events",
             "status/inspect expose persisted flight state",
             "return creates a structured markdown packet",
+            "adjudicate records an explicit spine disposition on the flight",
         ],
         "fails_when": [
-            "flight id is unknown for inspect/return",
+            "flight id is unknown for inspect/return/adjudicate",
             "return file exists and --force is not provided",
         ],
     },
@@ -1149,6 +1152,27 @@ def cmd_raven_return(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_raven_adjudicate(args: argparse.Namespace) -> int:
+    try:
+        payload = adjudicate_flight(
+            state_runtime_dir=RAVEN_STATE_DIR,
+            flight_id=args.flight_id,
+            disposition=args.disposition,
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    print("RAVENS adjudication")
+    print(f"- id: {payload['id']}")
+    print(f"- adjudication: {payload['adjudication']}")
+    print(f"- status: {payload['status']}")
+    return 0
+
+
 def cmd_graft_propose(args: argparse.Namespace) -> int:
     title = _compact(" ".join(args.title))
     if not title:
@@ -1422,6 +1446,16 @@ def build_parser() -> argparse.ArgumentParser:
     raven_return_p.add_argument("--force", action="store_true", help="Overwrite return file if it already exists")
     raven_return_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     raven_return_p.set_defaults(func=cmd_raven_return)
+
+    raven_adjudicate_p = raven_sub.add_parser("adjudicate", help="Record a spine adjudication for a flight")
+    raven_adjudicate_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
+    raven_adjudicate_p.add_argument(
+        "disposition",
+        choices=["REJECT", "PARK", "TRIAL", "ADOPT", "ESCALATE_HITL"],
+        help="Spine adjudication/disposition class",
+    )
+    raven_adjudicate_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_adjudicate_p.set_defaults(func=cmd_raven_adjudicate)
 
     graft_p = sub.add_parser("graft", help="Propose additive structural growth artifacts")
     graft_sub = graft_p.add_subparsers(dest="graft_cmd", required=True)

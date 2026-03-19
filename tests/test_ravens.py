@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-YGG_CLI = Path.home() / "ygg" / "code" / "src" / "cli.py"
+YGG_CLI = Path.home() / "ygg" / "lib" / "ygg" / "cli.py"
 
 
 class TestRavensV1(unittest.TestCase):
@@ -95,7 +95,7 @@ class TestRavensV1(unittest.TestCase):
                 "return",
                 flight_id,
                 "--evidence",
-                "file:~/ygg/code/docs/RAVENS-V1.md",
+                "file:~/ygg/docs/RAVENS-V1.md",
                 "--failure-condition",
                 "no evidence linkage",
                 "--recommendation",
@@ -130,7 +130,7 @@ class TestRavensV1(unittest.TestCase):
                 "propose",
                 "Prune duplicate docs",
                 "--target",
-                "code/docs/",
+                "docs/",
                 "--problem-type",
                 "duplication",
                 "--json",

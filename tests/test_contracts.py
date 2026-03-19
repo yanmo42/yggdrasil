@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 
-YGG_CLI = Path.home() / "ygg" / "code" / "src" / "cli.py"
+YGG_CLI = Path.home() / "ygg" / "lib" / "ygg" / "cli.py"
 
 VERBS = ["suggest", "work", "paths", "raven", "graft", "beak", "root", "branch", "resume", "forge", "promote", "status"]
 REQUIRED_CONTRACT_KEYS = {
