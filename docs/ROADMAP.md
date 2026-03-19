@@ -41,7 +41,7 @@ Goal: make branch outcomes explicit.
 
 ## Phase 4 — Source migration
 
-Goal: move selected implementation into `~/ygg/src/` without losing clarity.
+Goal: move selected implementation into `~/ygg/lib/ygg/` without losing clarity.
 
 - [ ] decide what should remain in assistant-home
 - [ ] decide what should become Ygg-native code

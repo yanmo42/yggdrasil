@@ -49,8 +49,8 @@ Right now Ygg is a thin control surface over the current assistant-home implemen
 ### Human-facing Ygg home
 
 - `~/ygg/README.md`
-- `~/ygg/code/docs/`
-- `~/ygg/code/src/cli.py`
+- `~/ygg/docs/`
+- `~/ygg/lib/ygg/cli.py`
 - `~/ygg/bin/ygg` (compat launcher)
 - `~/ygg/machine/bootstrap-host.sh`
 
@@ -104,13 +104,26 @@ ygg raven launch --trigger human-request "Inspect package boundary drift"
 ygg raven status
 ygg raven inspect <flight-id>
 ygg raven return <flight-id>
+ygg raven adjudicate <flight-id> ADOPT
+```
+
+### Use topology-aligned command wrappers (optional)
+
+These wrapper paths are intentionally thin front doors into the canonical Ygg implementation:
+
+```bash
+./commands/raven/launch --trigger human-request "Inspect package boundary drift"
+./commands/raven/return <flight-id> --recommendation "Review result"
+./commands/spine/adjudicate/adjudicate <flight-id> ADOPT
+./commands/graft/propose "Add proposal gate" --target-attachment state/policy/
+./commands/beak/propose "Deprecate duplicate docs" --target docs/ --problem-type duplication
 ```
 
 ### Propose growth/pruning artifacts
 
 ```bash
 ygg graft propose "Add proposal gate" --target-attachment state/policy/
-ygg beak propose "Deprecate duplicate docs" --target code/docs/ --problem-type duplication
+ygg beak propose "Deprecate duplicate docs" --target docs/ --problem-type duplication
 ```
 
 ### Enter planner/work front door
@@ -178,12 +191,12 @@ ygg promote website-dev theme-selector-enhancements --disposition log-daily --dr
 If you modify verb semantics or `ygg help/explain` payload shape:
 
 ```bash
-python3 -m unittest discover -s ~/ygg/code/tests -p 'test_*.py' -v
+python3 -m unittest discover -s ~/ygg/tests -p 'test_*.py' -v
 ```
 
 ## When changes take effect
 
-Changes to Ygg usually take effect immediately because `ygg` resolves to `~/ygg/bin/ygg`, which calls `~/ygg/code/src/cli.py` (via `code/bin/ygg`).
+Changes to Ygg usually take effect immediately because `ygg` resolves to `~/ygg/bin/ygg`, which executes `python3 -m ygg.cli` with `~/ygg/lib` on `PYTHONPATH`.
 
 In some shells, command-location caching may need a refresh after replacing executables:
 
@@ -198,15 +211,15 @@ Opening a new shell also works.
 Read these in order if you want the full model:
 
 1. `~/ygg/README.md`
-2. `~/ygg/code/docs/NORTH-STAR.md`
-3. `~/ygg/code/docs/RAVENS.md`
-4. `~/ygg/code/docs/RAVENS-V1.md`
-5. `~/ygg/code/docs/VOCAB.md`
-6. `~/ygg/code/docs/VERBS.md`
-7. `~/ygg/code/docs/CONTRACTS.md`
-8. `~/ygg/code/docs/CONTINUITY-OPS-V1.md`
-9. `~/ygg/code/docs/ARCHITECTURE.md`
-10. `~/ygg/code/docs/ROADMAP.md`
+2. `~/ygg/docs/NORTH-STAR.md`
+3. `~/ygg/docs/RAVENS.md`
+4. `~/ygg/docs/RAVENS-V1.md`
+5. `~/ygg/docs/VOCAB.md`
+6. `~/ygg/docs/VERBS.md`
+7. `~/ygg/docs/CONTRACTS.md`
+8. `~/ygg/docs/CONTINUITY-OPS-V1.md`
+9. `~/ygg/docs/ARCHITECTURE.md`
+10. `~/ygg/docs/ROADMAP.md`
 11. `~/ygg/SECURITY.md`
 
 ## v1 limitations

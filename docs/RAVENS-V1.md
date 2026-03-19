@@ -3,7 +3,7 @@
 - Status: Draft
 - Scope: Implementable v1 protocol
 - Builds on:
-  - `code/docs/RAVENS.md`
+  - `docs/RAVENS.md`
   - ADR-0002 (Yggdrasil architecture)
   - ADR-0003 (spine-first omnidirectional topology)
   - ADR-0004 (transcript spine access)
@@ -405,9 +405,9 @@ Minimum event object:
   "purpose": "Inspect current filesystem/package boundary and propose RAVENS spec",
   "surface": "filesystem",
   "action": "read",
-  "target": "~/ygg/code/docs",
+  "target": "~/ygg/docs",
   "evidenceRefs": [
-    "file:~/ygg/code/docs/RAVENS.md"
+    "file:~/ygg/docs/RAVENS.md"
   ],
   "notes": "Observed existing conceptual raven draft; implementation contract still missing."
 }
@@ -455,8 +455,8 @@ A graft proposal must include:
 - `adoption_path`
 
 Example attachment points:
-- `code/docs/`
-- `code/src/`
+- `docs/`
+- `lib/ygg/`
 - `machine/`
 - `state/policy/`
 - `state/scripts/`

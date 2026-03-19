@@ -280,6 +280,7 @@ Run RAVENS v1 flight operations.
 - `ygg raven status` lists known flights
 - `ygg raven inspect <flight-id>` prints one flight artifact
 - `ygg raven return <flight-id>` writes a structured return packet and marks the flight returned
+- `ygg raven adjudicate <flight-id> <disposition>` records an explicit spine disposition on the flight
 
 ### Safety posture
 - artifact scaffolding only
@@ -291,6 +292,7 @@ Run RAVENS v1 flight operations.
 ygg raven launch --trigger human-request "Inspect package boundary drift"
 ygg raven status
 ygg raven return <flight-id>
+ygg raven adjudicate <flight-id> ADOPT
 ```
 
 ---
@@ -323,7 +325,7 @@ Create subtractive/reshaping proposals for governance review.
 
 ### Example
 ```bash
-ygg beak propose "Deprecate duplicate docs" --target code/docs/ --problem-type duplication
+ygg beak propose "Deprecate duplicate docs" --target docs/ --problem-type duplication
 ```
 
 ---
