@@ -5,10 +5,8 @@ set -e
 cd /home/ian/ygg
 
 # 1. Launch a scout raven
-FLIGHT_NAME="TestScout"
-FLIGHT_TYPE="scout"
 FLIGHT_PURPOSE="Initial RAVENS command cycle test"
-OUTPUT=$(./code/commands/raven/launch "$FLIGHT_NAME" "$FLIGHT_TYPE" --trigger "test-init" --purpose "$FLIGHT_PURPOSE")
+OUTPUT=$(./commands/raven/launch --trigger "test-init" "$FLIGHT_PURPOSE")
 echo "Launch output: $OUTPUT"
 
 # Extract flight ID from output (it prints "Flight launched: RAVEN-...")
@@ -25,11 +23,11 @@ echo "Test evidence" > "$EVIDENCE_DIR/evidence.txt"
 EVIDENCE_REF="file://$(pwd)/state/runtime/ravens/tests/evidence.txt"
 
 # 3. Return the flight (Muninn processing)
-./code/commands/raven/return "$FLIGHT_ID" --summary "Test RAVENS cycle run" --discrepancies "None observed" --evidence "$EVIDENCE_REF"
+./commands/raven/return "$FLIGHT_ID" --evidence "$EVIDENCE_REF" --failure-condition "None observed" --recommendation "Test RAVENS cycle run" --adjudication ADOPT --promotion LOG_DAILY
 echo "Return processed."
 
 # 4. Adjudicate (spine decision)
-./code/commands/spine/adjudicate/adjudicate "$FLIGHT_ID" "ADOPT"
+./commands/spine/adjudicate/adjudicate "$FLIGHT_ID" "ADOPT"
 echo "Adjudicated as ADOPT."
 
 # 5. Show latest log entries

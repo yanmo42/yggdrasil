@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+  RESOLVED="$(readlink -f -- "$SCRIPT_PATH" 2>/dev/null || true)"
+  if [[ -n "$RESOLVED" ]]; then
+    SCRIPT_PATH="$RESOLVED"
+  fi
+fi
+SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
+YGG_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
+exec "$YGG_ROOT/bin/ygg" raven launch "$@"
