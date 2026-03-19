@@ -50,6 +50,7 @@ That means:
 For the deeper rationale, read:
 
 - `docs/ARCHITECTURE.md`
+- `docs/DEPENDENCIES.md`
 
 ---
 
@@ -147,9 +148,11 @@ That is acceptable for now as long as the dependency stays explicit and inspecta
 10. `docs/ROADMAP.md`
 11. `SECURITY.md`
 12. `lib/ygg/cli.py`
-13. `commands/README.md`
-14. `machine/bootstrap-host.sh`
-15. `state/policy/STATE-BOUNDARY.md`
+13. `docs/DEPENDENCIES.md`
+14. `commands/README.md`
+15. `links/README.md`
+16. `machine/bootstrap-host.sh`
+17. `state/policy/STATE-BOUNDARY.md`
 
 ---
 

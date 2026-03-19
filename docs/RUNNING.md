@@ -63,6 +63,11 @@ Right now Ygg is a thin control surface over the current assistant-home implemen
 
 This means Ygg is the clean front door, while some implementation still lives in the assistant workspace.
 
+For the explicit ownership boundary, read:
+
+- `docs/DEPENDENCIES.md`
+- `links/README.md`
+
 ## Core commands
 
 ### Explain what verbs do (self-teaching)

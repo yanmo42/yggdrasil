@@ -140,6 +140,10 @@ Explicit bridge points to external canonical surfaces.
 This exists because Ygg is still partly connected to assistant-home internals in the OpenClaw workspace.
 Those bridges should be visible and documented rather than implicit.
 
+Reference:
+- `links/README.md`
+- `docs/DEPENDENCIES.md`
+
 ## System strata
 
 Ygg consists of four visible strata:
