@@ -1231,43 +1231,60 @@ def _nyx_contract_ref() -> dict[str, str] | None:
     }
 
 
+def _confidence_band(c: float) -> str:
+    if c >= 0.85:
+        return "high"
+    if c >= 0.65:
+        return "medium"
+    return "low"
+
+
 def _print_nyx_text(payload: dict[str, object]) -> None:
     print("Ygg nyx\n")
-    print(f"request: {payload['request']}")
-    print(f"intent: {payload['intent']}")
-    print(f"mode: {payload['mode']}")
-    print(f"route: {payload['route']}")
-    print(f"confidence: {payload['confidence']:.2f}")
+    print(f"request:    {payload['request']}")
+    print(f"intent:     {payload['intent']}")
+    print(f"route:      {payload['route']}")
 
-    contract = payload.get("contract") or {}
-    if contract:
-        print("contract:")
-        if contract.get("path"):
-            print(f"- local: {contract['path']}")
-        if contract.get("url"):
-            print(f"- remote: {contract['url']}")
+    conf = float(payload["confidence"])
+    band = _confidence_band(conf)
+    flag = "  !" if band == "low" else ""
+    print(f"confidence: {conf:.2f}  ({band}){flag}")
+
+    reason = payload.get("reason")
+    if reason:
+        print(f"reason:     {reason}")
+
+    active_tasks = payload.get("active_tasks") or []
+    if active_tasks:
+        print(f"\nactive tasks ({len(active_tasks)}):")
+        for row in active_tasks:
+            freshness = row.get("freshness", "")
+            flag = "  !" if freshness == "stale" else ""
+            print(f"  [{row.get('domain')}] {row.get('task')}  {freshness}{flag}")
+            if row.get("next_action"):
+                print(f"    → {row['next_action']}")
 
     ambiguities = payload.get("ambiguities") or []
     if ambiguities:
-        print("ambiguities:")
+        print("\nambiguities:")
         for item in ambiguities:
-            print(f"- {item}")
+            print(f"  ! {item}")
 
     notes = payload.get("notes") or []
     if notes:
-        print("notes:")
+        print("\nnotes:")
         for item in notes:
-            print(f"- {item}")
+            print(f"  - {item}")
 
     suggestions = payload.get("suggestions") or []
     if suggestions:
-        print("next commands:")
+        print("\nnext:")
         for idx, entry in enumerate(suggestions, start=1):
             star = " *" if entry.get("primary") else ""
-            print(f"{idx}. {entry['command']}{star}")
+            print(f"  {idx}. {entry['command']}{star}")
             why = entry.get("why")
             if why:
-                print(f"   {why}")
+                print(f"     {why}")
 
 
 def cmd_nyx(args: argparse.Namespace) -> int:
