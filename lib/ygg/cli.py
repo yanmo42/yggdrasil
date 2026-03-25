@@ -10,6 +10,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+_SELF = Path(__file__).resolve()
+_LIB_ROOT = _SELF.parents[1]
+if str(_LIB_ROOT) not in sys.path:
+    sys.path.insert(0, str(_LIB_ROOT))
+
 from ygg.path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
 from ygg.ravens_v1 import (
     adjudicate_flight,
@@ -18,9 +23,12 @@ from ygg.ravens_v1 import (
     launch_flight,
     list_flights,
     load_flight,
+    load_flight_log,
     parse_actors,
     propose_beak,
     propose_graft,
+    record_aviary_exchange,
+    record_probe,
 )
 
 HOME = Path.home()
@@ -34,6 +42,8 @@ STATE_DIR = YGG_HOME / "state" / "runtime"
 NOTES_DIR = YGG_HOME / "state" / "notes"
 PROMOTION_LOG_JSONL = STATE_DIR / "promotions.jsonl"
 PROMOTION_LOG_MD = NOTES_DIR / "promotions.md"
+PERSONA_MODE_FILE = STATE_DIR / "persona-mode.json"
+WORKSPACE_PERSONA_MODE_FILE = WORKSPACE / "state" / "persona-mode.json"
 RAVEN_STATE_DIR = STATE_DIR
 DEFAULT_SESSION = "planner--main"
 DEFAULT_OPENCLAW_BIN = "openclaw"
@@ -193,6 +203,47 @@ EXPLAIN_CARDS = {
         ],
         "examples": ['ygg beak propose "Deprecate duplicate lane docs" --target docs/ --problem-type duplication'],
         "next": ["raven", "status"],
+    },
+    "mode": {
+        "purpose": "Persist or inspect persona-mode override state for Solace/Nyx, with optional live session notification.",
+        "when_to_use": [
+            "When you want Nyx or Solace to stay foregrounded beyond a single prompt.",
+            "When you want a small command-surface switch instead of typing mode directives manually.",
+        ],
+        "examples": [
+            "ygg mode nyx",
+            "ygg mode solace",
+            "ygg mode get",
+            "ygg mode clear",
+        ],
+        "next": ["run", "status", "work", "root"],
+    },
+    "run": {
+        "purpose": "Friendly alias for fast mode control, especially `ygg run nyx`.",
+        "when_to_use": [
+            "When you want the shortest command for switching foreground persona.",
+            "When you want `run` to act like an imperative front door instead of remembering `mode` syntax.",
+        ],
+        "examples": [
+            "ygg run nyx",
+            "ygg run solace",
+            "ygg run auto",
+            "ygg run get",
+        ],
+        "next": ["nyx", "mode", "status", "work"],
+    },
+    "nyx": {
+        "purpose": "Foreground Nyx directly; with prompt text, emit a Nyx-shaped interpretation payload and next commands.",
+        "when_to_use": [
+            "When you want a dedicated Nyx front door instead of `mode` or `run`.",
+            "When you want terse symbolic or ambiguous text interpreted into bounded suggestions.",
+        ],
+        "examples": [
+            "ygg nyx",
+            "ygg nyx \"something chasing always\"",
+            "ygg nyx --json \"audit the site routing\"",
+        ],
+        "next": ["suggest", "work", "mode"],
     },
 }
 
@@ -364,6 +415,68 @@ VERB_CONTRACTS = {
         "calls": ["ravens_v1.propose_beak"],
         "guarantees": ["creates beak proposal artifact only (no destructive execution)"],
         "fails_when": ["proposal id exists and --force is not provided"],
+    },
+    "mode": {
+        "mutates_state": True,
+        "requires": ["nyx|solace|get|clear"],
+        "optional": ["--session", "--openclaw-bin", "--print-message", "--no-notify", "--json"],
+        "writes": [
+            "~/ygg/state/runtime/persona-mode.json",
+            "~/.openclaw/workspace-claw-main/state/persona-mode.json",
+            "planner/session message stream (unless --no-notify or get)",
+        ],
+        "calls": ["openclaw tui --session ... --message ..."],
+        "guarantees": [
+            "persists current persona override state for future startup reads",
+            "can notify a live session immediately with a mode directive",
+            "get never mutates state",
+            "clear returns control to automatic domain routing",
+        ],
+        "fails_when": [
+            "OpenClaw session notification fails when notification is requested",
+            "mode is outside nyx/solace/get/clear",
+        ],
+    },
+    "run": {
+        "mutates_state": True,
+        "requires": ["nyx|solace|auto|get|clear"],
+        "optional": ["--session", "--openclaw-bin", "--print-message", "--no-notify", "--json"],
+        "writes": [
+            "~/ygg/state/runtime/persona-mode.json",
+            "~/.openclaw/workspace-claw-main/state/persona-mode.json",
+            "planner/session message stream (unless --no-notify or get)",
+        ],
+        "calls": ["cmd_mode alias mapping"],
+        "guarantees": [
+            "supports `ygg run nyx` as a first-class alias",
+            "maps auto to clear for a friendlier reset verb",
+            "shares persistence and notification behavior with `ygg mode`",
+        ],
+        "fails_when": [
+            "OpenClaw session notification fails when notification is requested",
+            "action is outside nyx/solace/auto/get/clear",
+        ],
+    },
+    "nyx": {
+        "mutates_state": "sometimes",
+        "requires": [],
+        "optional": ["request...", "--session", "--openclaw-bin", "--notify", "--json"],
+        "writes": [
+            "~/ygg/state/runtime/persona-mode.json",
+            "~/.openclaw/workspace-claw-main/state/persona-mode.json",
+            "Nyx interpretation payload to stdout",
+            "planner/session message stream (only when notifying or no request is provided)",
+        ],
+        "calls": ["cmd_mode", "tools.work_v1.router.classify_request", "tools.work_v1.planner.load_active_tasks"],
+        "guarantees": [
+            "`ygg nyx` foregrounds Nyx directly",
+            "`ygg nyx <request>` emits a Nyx-shaped interpretation payload and suggestions",
+            "references the nyx-nlp contract when present locally",
+        ],
+        "fails_when": [
+            "workspace planner/router imports are unavailable for request interpretation",
+            "OpenClaw session notification fails when notification is requested",
+        ],
     },
 }
 
@@ -540,6 +653,67 @@ def _forced_packet(*, request: str | None, action: str, reason: str, session: st
         route=route,
         planner_session_suffix=session,
     )
+
+
+def _load_mode_state() -> dict[str, object]:
+    if PERSONA_MODE_FILE.exists():
+        try:
+            payload = json.loads(PERSONA_MODE_FILE.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError:
+            pass
+    return {
+        "defaultMode": "auto",
+        "overrideMode": None,
+        "effectiveMode": "auto",
+        "updatedAt": None,
+        "source": "ygg-mode",
+    }
+
+
+def _save_mode_state(payload: dict[str, object]) -> None:
+    for file_path in (PERSONA_MODE_FILE, WORKSPACE_PERSONA_MODE_FILE):
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _mode_message(override: str | None) -> str:
+    if override == "nyx":
+        return (
+            "Mode directive: switch foreground persona to Nyx until further notice. "
+            "Nyx is the interpretive lead now, especially for architecture, failure analysis, and naming. "
+            "If Ian asks for plain speech or practical sequencing, collapse cleanly into Solace-style clarity as needed."
+        )
+    if override == "solace":
+        return (
+            "Mode directive: switch foreground persona to Solace until further notice. "
+            "Lead with grounded, practical, stabilizing responses unless Ian explicitly requests Nyx or a shadow read."
+        )
+    return (
+        "Mode directive cleared: return to automatic persona routing. "
+        "Use Nyx by default for architecture, failure analysis, and naming; use Solace elsewhere unless Ian explicitly asks otherwise."
+    )
+
+
+def _print_mode_text(payload: dict[str, object]) -> None:
+    print("Ygg mode\n")
+    print(f"- default: {payload.get('defaultMode', 'auto')}")
+    print(f"- override: {payload.get('overrideMode') or 'none'}")
+    print(f"- effective: {payload.get('effectiveMode', 'auto')}")
+    if payload.get('updatedAt'):
+        print(f"- updated: {payload['updatedAt']}")
+    if payload.get('workspaceFile'):
+        print(f"- workspace file: {payload['workspaceFile']}")
+    if payload.get('yggFile'):
+        print(f"- ygg file: {payload['yggFile']}")
+    if payload.get('notify') is not None:
+        print(f"- notify: {'yes' if payload.get('notify') else 'no'}")
+    if payload.get('session'):
+        print(f"- session: {payload['session']}")
+    if payload.get('message'):
+        print("\nmessage:")
+        print(payload['message'])
 
 
 def _append_promotion_record(record: dict) -> None:
@@ -973,6 +1147,185 @@ def cmd_suggest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _apply_mode_action(action: str, *, session: str, openclaw_bin: str, no_notify: bool) -> tuple[dict[str, object], int]:
+    state = _load_mode_state()
+
+    if action == "get":
+        payload = dict(state)
+        payload.update({
+            "action": "get",
+            "workspaceFile": str(WORKSPACE_PERSONA_MODE_FILE),
+            "yggFile": str(PERSONA_MODE_FILE),
+        })
+        return payload, 0
+
+    override = None if action == "clear" else action
+    payload = {
+        "defaultMode": "auto",
+        "overrideMode": override,
+        "effectiveMode": override or "auto",
+        "updatedAt": _now_iso(),
+        "source": "ygg-mode",
+        "workspaceFile": str(WORKSPACE_PERSONA_MODE_FILE),
+        "yggFile": str(PERSONA_MODE_FILE),
+        "notify": not no_notify,
+        "session": None if no_notify else session,
+    }
+    message = _mode_message(override)
+    payload["message"] = message
+
+    _save_mode_state(payload)
+
+    rc = 0
+    if not no_notify:
+        rc = _run([openclaw_bin, "tui", "--session", session, "--message", message])
+        if rc != 0:
+            payload["notified"] = False
+            payload["notifyExit"] = rc
+            return payload, rc
+
+    payload["notified"] = not no_notify
+    return payload, 0
+
+
+def cmd_mode(args: argparse.Namespace) -> int:
+    action = args.action.lower()
+    payload, rc = _apply_mode_action(action, session=args.session, openclaw_bin=args.openclaw_bin, no_notify=args.no_notify)
+
+    if args.print_message:
+        print(payload.get("message", ""))
+        return 0
+
+    if rc != 0:
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            _print_mode_text(payload)
+            print(f"\nwarning: mode persisted, but live session notification failed (exit {rc}).")
+        return rc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        _print_mode_text(payload)
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    action = args.action.lower()
+    mapped = "clear" if action == "auto" else action
+    alias_args = argparse.Namespace(**vars(args))
+    alias_args.action = mapped
+    return cmd_mode(alias_args)
+
+
+def _nyx_contract_ref() -> dict[str, str] | None:
+    local_schema = HOME / "projects" / "nyx-nlp" / "schemas" / "intent.schema.json"
+    if local_schema.exists():
+        return {
+            "path": str(local_schema),
+            "url": "https://github.com/yanmo42/nyx-nlp/blob/main/schemas/intent.schema.json",
+        }
+    return {
+        "url": "https://github.com/yanmo42/nyx-nlp/blob/main/schemas/intent.schema.json",
+    }
+
+
+def _print_nyx_text(payload: dict[str, object]) -> None:
+    print("Ygg nyx\n")
+    print(f"request: {payload['request']}")
+    print(f"intent: {payload['intent']}")
+    print(f"mode: {payload['mode']}")
+    print(f"route: {payload['route']}")
+    print(f"confidence: {payload['confidence']:.2f}")
+
+    contract = payload.get("contract") or {}
+    if contract:
+        print("contract:")
+        if contract.get("path"):
+            print(f"- local: {contract['path']}")
+        if contract.get("url"):
+            print(f"- remote: {contract['url']}")
+
+    ambiguities = payload.get("ambiguities") or []
+    if ambiguities:
+        print("ambiguities:")
+        for item in ambiguities:
+            print(f"- {item}")
+
+    notes = payload.get("notes") or []
+    if notes:
+        print("notes:")
+        for item in notes:
+            print(f"- {item}")
+
+    suggestions = payload.get("suggestions") or []
+    if suggestions:
+        print("next commands:")
+        for idx, entry in enumerate(suggestions, start=1):
+            star = " *" if entry.get("primary") else ""
+            print(f"{idx}. {entry['command']}{star}")
+            why = entry.get("why")
+            if why:
+                print(f"   {why}")
+
+
+def cmd_nyx(args: argparse.Namespace) -> int:
+    request = _compact(" ".join(args.request))
+    notify = getattr(args, "notify", False)
+
+    mode_payload, rc = _apply_mode_action("nyx", session=args.session, openclaw_bin=args.openclaw_bin, no_notify=not notify)
+    if rc != 0:
+        if args.json:
+            print(json.dumps(mode_payload, indent=2, ensure_ascii=False))
+        else:
+            _print_mode_text(mode_payload)
+            print(f"\nwarning: mode persisted, but live session notification failed (exit {rc}).")
+        return rc
+
+    if not request:
+        if args.json:
+            print(json.dumps(mode_payload, indent=2, ensure_ascii=False))
+        else:
+            _print_mode_text(mode_payload)
+        return 0
+
+    _require_workspace_imports()
+    tasks = _active_tasks()
+    route = classify_request(request, tasks)
+    route = _augment_route_for_suggest(route, request, tasks)
+    suggestions = _build_suggestions(request, route, tasks)
+    ambiguities: list[str] = []
+    notes = [
+        "foreground mode forced to nyx",
+        "Nyx request interpretation leaves tracks before execution",
+    ]
+    if route.action == "ask_for_clarification":
+        ambiguities.append("request remains ambiguous after first-pass routing")
+    if route.needs_approval:
+        notes.append("suggested follow-up may require approval")
+
+    payload = {
+        "request": request,
+        "intent": route.action,
+        "confidence": route.confidence,
+        "mode": "nyx",
+        "route": suggestions[0]["verb"] if suggestions else route.action,
+        "notes": notes,
+        "ambiguities": ambiguities,
+        "contract": _nyx_contract_ref(),
+        "reason": route.reason,
+        "suggestions": suggestions,
+        "active_tasks": _active_task_rows(tasks),
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    _print_nyx_text(payload)
+    return 0
+
+
 def cmd_work(args: argparse.Namespace) -> int:
     cmd = [sys.executable, str(WORK_SCRIPT)]
     if PATH_CONTRACT_FILE is not None:
@@ -1121,6 +1474,92 @@ def cmd_raven_inspect(args: argparse.Namespace) -> int:
         return 0
 
     print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_raven_trace(args: argparse.Namespace) -> int:
+    try:
+        rows = load_flight_log(RAVEN_STATE_DIR, args.flight_id)
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.limit:
+        rows = rows[-args.limit :]
+
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+
+    print(f"RAVENS trace — {args.flight_id}")
+    for row in rows:
+        ts = row.get("timestamp", "?")
+        actor = row.get("actor", "unknown")
+        phase = row.get("phase", "event")
+        action = row.get("action", "?")
+        target = row.get("target", "?")
+        note = row.get("notes") or row.get("outcome") or ""
+        print(f"- {ts} | {actor} | {phase} | {action} -> {target}")
+        if note:
+            print(f"  note: {note}")
+    return 0
+
+
+def cmd_raven_probe(args: argparse.Namespace) -> int:
+    try:
+        payload = record_probe(
+            state_runtime_dir=RAVEN_STATE_DIR,
+            flight_id=args.flight_id,
+            actor=_slugify(args.actor),
+            surface=args.surface,
+            action=_slugify(args.action),
+            outcome=args.outcome,
+            tags=args.tag or [],
+            notes=args.notes or "",
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    print("RAVENS probe")
+    print(f"- flight: {payload['flightId']}")
+    print(f"- actor: {payload['actor']}")
+    print(f"- action: {payload['action']}")
+    print(f"- surface: {payload['target']}")
+    print(f"- outcome: {payload['outcome']}")
+    return 0
+
+
+def cmd_raven_aviary(args: argparse.Namespace) -> int:
+    topic = _compact(" ".join(args.topic))
+    if not topic:
+        raise SystemExit("`ygg raven aviary` requires a topic.")
+
+    try:
+        payload = record_aviary_exchange(
+            state_runtime_dir=RAVEN_STATE_DIR,
+            flight_id=args.flight_id,
+            actors=parse_actors(args.actors),
+            topic=topic,
+            claims=args.claim or [],
+            outcome=args.outcome,
+            notes=args.notes or "",
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    print("RAVENS aviary")
+    print(f"- flight: {payload['flightId']}")
+    print(f"- actors: {', '.join(payload['actors'])}")
+    print(f"- topic: {payload['topic']}")
+    print(f"- outcome: {payload['outcome']}")
+    print(f"- file: {payload['file']}")
     return 0
 
 
@@ -1393,6 +1832,32 @@ def build_parser() -> argparse.ArgumentParser:
     suggest_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     suggest_p.set_defaults(func=cmd_suggest)
 
+    mode_p = sub.add_parser("mode", help="Persist or inspect persona-mode override state")
+    mode_p.add_argument("action", choices=["nyx", "solace", "get", "clear"], help="Set Nyx/Solace override, inspect current mode, or clear override")
+    mode_p.add_argument("--session", default=DEFAULT_SESSION, help=f"Session suffix to notify live mode changes (default: {DEFAULT_SESSION})")
+    mode_p.add_argument("--openclaw-bin", default=DEFAULT_OPENCLAW_BIN, help="OpenClaw binary path")
+    mode_p.add_argument("--print-message", action="store_true", help="Print the switch directive instead of notifying a session")
+    mode_p.add_argument("--no-notify", action="store_true", help="Persist mode state without sending a live session message")
+    mode_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    mode_p.set_defaults(func=cmd_mode)
+
+    run_p = sub.add_parser("run", help="Fast alias for persona mode control (e.g. `ygg run nyx`)")
+    run_p.add_argument("action", choices=["nyx", "solace", "auto", "get", "clear"], help="Set Nyx/Solace override, inspect current mode, or reset to auto")
+    run_p.add_argument("--session", default=DEFAULT_SESSION, help=f"Session suffix to notify live mode changes (default: {DEFAULT_SESSION})")
+    run_p.add_argument("--openclaw-bin", default=DEFAULT_OPENCLAW_BIN, help="OpenClaw binary path")
+    run_p.add_argument("--print-message", action="store_true", help="Print the switch directive instead of notifying a session")
+    run_p.add_argument("--no-notify", action="store_true", help="Persist mode state without sending a live session message")
+    run_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    run_p.set_defaults(func=cmd_run)
+
+    nyx_p = sub.add_parser("nyx", help="Direct Nyx front door; optional request text yields Nyx-shaped routing output")
+    nyx_p.add_argument("request", nargs="*", help="Optional freeform request text for Nyx interpretation")
+    nyx_p.add_argument("--session", default=DEFAULT_SESSION, help=f"Session suffix to notify live mode changes (default: {DEFAULT_SESSION})")
+    nyx_p.add_argument("--openclaw-bin", default=DEFAULT_OPENCLAW_BIN, help="OpenClaw binary path")
+    nyx_p.add_argument("--notify", action="store_true", help="Also notify the live session when request text is supplied")
+    nyx_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    nyx_p.set_defaults(func=cmd_nyx)
+
     work_p = sub.add_parser("work", help="Natural-language front door into the planner-aware work wrapper")
     work_p.add_argument("request", nargs="*", help="Freeform request text")
     work_p.set_defaults(func=cmd_work)
@@ -1424,6 +1889,33 @@ def build_parser() -> argparse.ArgumentParser:
     raven_inspect_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
     raven_inspect_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     raven_inspect_p.set_defaults(func=cmd_raven_inspect)
+
+    raven_trace_p = raven_sub.add_parser("trace", help="Show flight event log")
+    raven_trace_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
+    raven_trace_p.add_argument("--limit", type=int, default=50, help="Max log events to show (default: 50)")
+    raven_trace_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_trace_p.set_defaults(func=cmd_raven_trace)
+
+    raven_probe_p = raven_sub.add_parser("probe", help="Record an observed surface interaction for a flight")
+    raven_probe_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
+    raven_probe_p.add_argument("surface", help="Touched surface or resource")
+    raven_probe_p.add_argument("--action", default="observe", help="Probe action label (default: observe)")
+    raven_probe_p.add_argument("--actor", default="huginn", help="Actor recording the probe (default: huginn)")
+    raven_probe_p.add_argument("--outcome", default="observed", help="Outcome summary (default: observed)")
+    raven_probe_p.add_argument("--tag", action="append", help="Optional repeatable tags")
+    raven_probe_p.add_argument("--notes", help="Optional freeform notes")
+    raven_probe_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_probe_p.set_defaults(func=cmd_raven_probe)
+
+    raven_aviary_p = raven_sub.add_parser("aviary", help="Record a bounded raven-to-raven exchange")
+    raven_aviary_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
+    raven_aviary_p.add_argument("topic", nargs="+", help="Topic of the exchange")
+    raven_aviary_p.add_argument("--actors", default="huginn,muninn", help="Comma/space-separated actors (default: huginn,muninn)")
+    raven_aviary_p.add_argument("--claim", action="append", help="Repeatable claim exchanged in aviary")
+    raven_aviary_p.add_argument("--outcome", default="park-for-spine", help="Outcome summary (default: park-for-spine)")
+    raven_aviary_p.add_argument("--notes", help="Optional freeform notes")
+    raven_aviary_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    raven_aviary_p.set_defaults(func=cmd_raven_aviary)
 
     raven_return_p = raven_sub.add_parser("return", help="Create a structured return packet for a flight")
     raven_return_p.add_argument("flight_id", help="Flight id (e.g., RAVEN-...)")
