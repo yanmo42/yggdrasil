@@ -94,6 +94,24 @@ ygg status
 ygg status website-dev
 ```
 
+### Switch persona mode override
+
+```bash
+ygg mode nyx
+ygg mode solace
+ygg mode get
+ygg mode clear
+ygg mode nyx --session planner--main
+ygg mode nyx --no-notify
+```
+
+`ygg mode` is a Ygg-side control for persona posture, not a native OpenClaw engine switch.
+It persists override state to both:
+- `~/ygg/state/runtime/persona-mode.json`
+- `~/.openclaw/workspace-claw-main/state/persona-mode.json`
+
+By default it also sends a live switch directive into the target session. Use `--no-notify` if you only want to persist state.
+
 ### Inspect/validate path contract
 
 ```bash

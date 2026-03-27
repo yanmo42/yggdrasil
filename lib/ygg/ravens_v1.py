@@ -73,6 +73,21 @@ def _append_event(log_file: Path, event: dict) -> None:
         fh.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
+def load_flight_log(state_runtime_dir: Path, flight_id: str) -> list[dict]:
+    paths = ensure_raven_dirs(state_runtime_dir)
+    log_file = paths["logs"] / f"{flight_id}.jsonl"
+    if not log_file.exists():
+        raise FileNotFoundError(f"Unknown flight id: {flight_id}")
+
+    rows: list[dict] = []
+    for line in log_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        rows.append(json.loads(line))
+    return rows
+
+
 def launch_flight(
     *,
     state_runtime_dir: Path,
@@ -337,6 +352,104 @@ def adjudicate_flight(
         "adjudication": disposition,
         "updatedAt": now,
     }
+
+
+def record_probe(
+    *,
+    state_runtime_dir: Path,
+    flight_id: str,
+    actor: str,
+    surface: str,
+    action: str,
+    outcome: str,
+    tags: list[str],
+    notes: str,
+) -> dict:
+    paths = ensure_raven_dirs(state_runtime_dir)
+    flight = load_flight(state_runtime_dir, flight_id)
+
+    now = _now_iso()
+    event_id = f"{flight_id}::probe::{uuid4().hex[:6]}"
+    event = {
+        "id": event_id,
+        "flightId": flight_id,
+        "phase": "probe",
+        "actor": actor,
+        "timestamp": now,
+        "trigger": flight.get("trigger", "unknown"),
+        "purpose": flight.get("purpose", ""),
+        "action": action,
+        "target": surface,
+        "outcome": outcome,
+        "tags": tags,
+        "notes": notes or "Probe event recorded.",
+    }
+
+    log_file = paths["logs"] / f"{flight_id}.jsonl"
+    _append_event(log_file, event)
+
+    flight["updatedAt"] = now
+    touched = flight.setdefault("touchedSurfaces", [])
+    if surface not in touched:
+        touched.append(surface)
+    save_flight(state_runtime_dir, flight)
+
+    return event
+
+
+def record_aviary_exchange(
+    *,
+    state_runtime_dir: Path,
+    flight_id: str,
+    actors: list[str],
+    topic: str,
+    claims: list[str],
+    outcome: str,
+    notes: str,
+) -> dict:
+    paths = ensure_raven_dirs(state_runtime_dir)
+    flight = load_flight(state_runtime_dir, flight_id)
+
+    now = _now_iso()
+    aviary_id = _new_id("AVIARY")
+    file = paths["aviary"] / f"{aviary_id}.json"
+    payload = {
+        "id": aviary_id,
+        "flightId": flight_id,
+        "timestamp": now,
+        "actors": actors,
+        "topic": topic,
+        "claims": claims,
+        "outcome": outcome,
+        "notes": notes,
+    }
+    file.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    log_file = paths["logs"] / f"{flight_id}.jsonl"
+    _append_event(
+        log_file,
+        {
+            "id": f"{flight_id}::aviary::{aviary_id}",
+            "flightId": flight_id,
+            "phase": "aviary",
+            "actor": actors[0] if actors else "aviary",
+            "timestamp": now,
+            "trigger": flight.get("trigger", "unknown"),
+            "purpose": flight.get("purpose", ""),
+            "action": "exchange",
+            "target": str(file),
+            "outcome": outcome,
+            "tags": actors,
+            "notes": topic,
+        },
+    )
+
+    flight["updatedAt"] = now
+    flight.setdefault("aviaryFiles", []).append(str(file))
+    save_flight(state_runtime_dir, flight)
+
+    payload["file"] = str(file)
+    return payload
 
 
 def propose_graft(

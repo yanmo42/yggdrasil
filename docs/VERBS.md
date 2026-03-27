@@ -248,6 +248,37 @@ ygg promote website-dev theme-selector-enhancements \
 
 ---
 
+## `ygg mode`
+
+### Purpose
+Persist or inspect persona-mode override state for Solace/Nyx, with optional live session notification.
+
+### v1 behavior
+- `ygg mode nyx` persists a Nyx override and sends a switch directive to a target session by default
+- `ygg mode solace` persists a Solace override and sends a switch directive to a target session by default
+- `ygg mode get` prints the current override/effective mode
+- `ygg mode clear` removes the manual override and returns control to automatic domain routing
+- writes mode state to both Ygg runtime state and assistant-home workspace state for future startup reads
+- supports `--no-notify` to persist without messaging a live session
+- supports `--print-message` to print the directive text instead of sending it
+
+### Use when
+- you want Nyx or Solace to stay foregrounded beyond one prompt
+- you want a small command-surface switch instead of conversational mode requests
+- you want to return to automatic routing after a temporary override
+
+### Examples
+```bash
+ygg mode nyx
+ygg mode solace
+ygg mode get
+ygg mode clear
+ygg mode nyx --session planner--main
+ygg mode nyx --no-notify
+```
+
+---
+
 ## `ygg status`
 
 ### Purpose

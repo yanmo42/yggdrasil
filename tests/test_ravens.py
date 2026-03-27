@@ -109,6 +109,65 @@ class TestRavensV1(unittest.TestCase):
             inspected_after = self._run(home, "raven", "inspect", flight_id, "--json")
             self.assertEqual(inspected_after["status"], "returned")
 
+    def test_raven_probe_aviary_and_trace_roundtrip(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            launched = self._run(
+                home,
+                "raven",
+                "launch",
+                "--trigger",
+                "manual-check",
+                "map dark surfaces",
+                "--json",
+            )
+            flight_id = launched["id"]
+
+            probe = self._run(
+                home,
+                "raven",
+                "probe",
+                flight_id,
+                "state/runtime/promotions.jsonl",
+                "--action",
+                "observe",
+                "--outcome",
+                "tagged-canary-visible",
+                "--tag",
+                "canary",
+                "--tag",
+                "runtime",
+                "--json",
+            )
+            self.assertEqual(probe["flightId"], flight_id)
+            self.assertEqual(probe["target"], "state/runtime/promotions.jsonl")
+
+            aviary = self._run(
+                home,
+                "raven",
+                "aviary",
+                flight_id,
+                "compare",
+                "suspicious",
+                "path",
+                "--claim",
+                "surface touched during probe",
+                "--claim",
+                "needs spine review",
+                "--json",
+            )
+            self.assertEqual(aviary["flightId"], flight_id)
+            self.assertTrue(Path(aviary["file"]).exists())
+
+            trace = self._run(home, "raven", "trace", flight_id, "--json")
+            phases = [row.get("phase") for row in trace]
+            self.assertIn("probe", phases)
+            self.assertIn("aviary", phases)
+
+            inspected = self._run(home, "raven", "inspect", flight_id, "--json")
+            self.assertIn("state/runtime/promotions.jsonl", inspected.get("touchedSurfaces", []))
+            self.assertTrue(inspected.get("aviaryFiles"))
+
     def test_graft_and_beak_proposals_create_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             home = Path(td)

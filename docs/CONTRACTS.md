@@ -129,6 +129,24 @@ This file makes verb behavior explicit so human/machine usage stays aligned.
 - fails when:
   - resume status command exits non-zero
 
+## `ygg mode`
+
+- mutates state: `true` (`get` is read-only)
+- requires: `nyx|solace|get|clear`
+- optional: `--session`, `--openclaw-bin`, `--print-message`, `--no-notify`, `--json`
+- writes:
+  - `~/ygg/state/runtime/persona-mode.json`
+  - `~/.openclaw/workspace-claw-main/state/persona-mode.json`
+  - planner/session message stream (unless `--no-notify`, `--print-message`, or `get`)
+- guarantees:
+  - persists current persona override state for future startup reads
+  - can notify a live session immediately with a mode directive
+  - `get` never mutates state
+  - `clear` returns control to automatic domain routing
+- fails when:
+  - OpenClaw live-session notification fails when notification is requested
+  - mode is outside `nyx|solace|get|clear`
+
 ## `ygg raven` (namespace)
 
 - mutates state: `true`

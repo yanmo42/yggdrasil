@@ -560,6 +560,9 @@ These verbs are suggested, not mandatory.
 ygg raven launch
 ygg raven status
 ygg raven inspect <flight-id>
+ygg raven trace <flight-id>
+ygg raven probe <flight-id> <surface>
+ygg raven aviary <flight-id> <topic>
 ygg raven return <flight-id>
 ygg graft propose
 ygg beak propose

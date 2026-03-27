@@ -176,6 +176,7 @@ Current verbs:
 - `ygg forge`
 - `ygg promote`
 - `ygg status`
+- `ygg mode`
 
 ---
 
