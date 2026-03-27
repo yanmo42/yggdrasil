@@ -15,6 +15,12 @@ _LIB_ROOT = _SELF.parents[1]
 if str(_LIB_ROOT) not in sys.path:
     sys.path.insert(0, str(_LIB_ROOT))
 
+from ygg.continuity import (
+    ALLOWED_DISPOSITIONS as CONTINUITY_DISPOSITIONS,
+    PROMOTION_DISPOSITIONS,
+    load_latest_checkpoint,
+    write_checkpoint as write_continuity_checkpoint,
+)
 from ygg.path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
 from ygg.ravens_v1 import (
     adjudicate_flight,
@@ -150,25 +156,38 @@ EXPLAIN_CARDS = {
         ],
         "next": ["promote", "status", "resume"],
     },
+    "checkpoint": {
+        "purpose": "Write a Sandy Chaos continuity checkpoint into canonical Ygg control-plane state.",
+        "when_to_use": [
+            "When you want a minimal lane summary with explicit disposition.",
+            "When bridging SC continuity artifacts into Ygg without baton edits.",
+        ],
+        "examples": [
+            'ygg checkpoint --lane bridge --summary "Kernel ported" --disposition LOG_ONLY',
+            'ygg checkpoint --lane bridge --summary "Needs docs" --disposition DOC_PROMOTE --promotion-target docs/CONTINUITY-OPS-V1.md',
+        ],
+        "next": ["status", "promote"],
+    },
     "promote": {
-        "purpose": "Record explicit branch disposition so meaningful outcomes do not vanish silently.",
+        "purpose": "Record either a baton promotion event or an SC continuity promotion checkpoint.",
         "when_to_use": [
             "When a branch produced a meaningful result.",
             "When you want a durable log of what happened next.",
         ],
         "examples": [
             'ygg promote website-dev theme-selector-enhancements --disposition log-daily --note "Scope clarified"',
+            'ygg promote --lane bridge --summary "Promote to docs" --disposition DOC_PROMOTE --promotion-target docs/CONTINUITY-OPS-V1.md',
             "ygg promote website-dev theme-selector-enhancements --disposition log-daily --dry-run",
         ],
         "next": ["status", "resume"],
     },
     "status": {
-        "purpose": "Inspect tracked domains, active tasks, and next actions.",
+        "purpose": "Inspect tracked baton state or the latest SC continuity checkpoint.",
         "when_to_use": [
             "When choosing which lane to target.",
             "When checking current baton state quickly.",
         ],
-        "examples": ["ygg status", "ygg status website-dev"],
+        "examples": ["ygg status", "ygg status website-dev", "ygg status --continuity"],
         "next": ["suggest", "resume", "branch"],
     },
     "raven": {
@@ -353,28 +372,61 @@ VERB_CONTRACTS = {
             "OpenClaw TUI launch fails when not in --print-packet mode",
         ],
     },
+    "checkpoint": {
+        "mutates_state": True,
+        "requires": ["--lane", "--summary", "--disposition"],
+        "optional": ["--promotion-target", "--evidence", "--next-action"],
+        "writes": ["~/ygg/state/ygg/checkpoints/*.json"],
+        "calls": ["continuity.write_checkpoint"],
+        "guarantees": [
+            "writes the Sandy Chaos continuity checkpoint shape into canonical Ygg control-plane state",
+            "preserves disposition, evidence, next-action, and promotion-target fields",
+        ],
+        "fails_when": [
+            "lane or summary is empty",
+            "disposition is invalid",
+            "promotion target is missing for a promotion disposition",
+        ],
+    },
     "promote": {
         "mutates_state": True,
-        "requires": ["domain", "task", "--disposition"],
-        "optional": ["--note", "--artifact (repeatable)", "--finish", "--dry-run"],
-        "writes": ["~/ygg/state/runtime/promotions.jsonl", "~/ygg/state/notes/promotions.md", "workspace resume baton (optional)"],
-        "calls": ["scripts/resume.py checkpoint (log-daily)", "scripts/resume.py finish (--finish)"],
+        "requires": ["either domain+task+--disposition or --lane+--summary+--disposition"],
+        "optional": [
+            "--note",
+            "--artifact (repeatable)",
+            "--finish",
+            "--dry-run",
+            "--lane",
+            "--summary",
+            "--promotion-target",
+            "--evidence",
+            "--next-action",
+        ],
+        "writes": [
+            "~/ygg/state/runtime/promotions.jsonl",
+            "~/ygg/state/notes/promotions.md",
+            "workspace resume baton (optional)",
+            "~/ygg/state/ygg/checkpoints/*.json",
+        ],
+        "calls": ["scripts/resume.py checkpoint (log-daily)", "scripts/resume.py finish (--finish)", "continuity.write_checkpoint"],
         "guarantees": [
-            "records explicit disposition event with timestamp",
+            "records explicit baton disposition events with timestamp",
+            "supports SC-compatible promotion checkpoints",
             "supports dry-run without writing",
         ],
         "fails_when": [
             "disposition is omitted or invalid",
+            "promotion target is missing for an SC promotion disposition",
             "follow-up resume checkpoint/finish command exits non-zero",
         ],
     },
     "status": {
         "mutates_state": False,
         "requires": [],
-        "optional": ["domain"],
+        "optional": ["domain", "--continuity"],
         "writes": [],
-        "calls": ["scripts/resume.py status"],
-        "guarantees": ["prints current domain/task baton summary"],
+        "calls": ["scripts/resume.py status", "continuity.load_latest_checkpoint"],
+        "guarantees": ["prints current domain/task baton summary or the latest continuity checkpoint"],
         "fails_when": ["resume status command exits non-zero"],
     },
     "raven": {
@@ -1364,7 +1416,43 @@ def cmd_root(args: argparse.Namespace) -> int:
     return _launch_packet(packet, session=args.session, openclaw_bin=args.openclaw_bin, print_packet=args.print_packet)
 
 
+def _continuity_payload() -> dict[str, object]:
+    checkpoint = load_latest_checkpoint(YGG_HOME)
+    if checkpoint is None:
+        return {"status": "empty", "message": "no Ygg checkpoints yet"}
+    return checkpoint.to_dict()
+
+
+def _write_continuity_from_args(args: argparse.Namespace) -> Path:
+    return write_continuity_checkpoint(
+        YGG_HOME,
+        lane=args.lane,
+        summary=args.summary,
+        disposition=args.disposition,
+        promotion_target=args.promotion_target,
+        evidence=args.evidence,
+        next_action=args.next_action,
+    )
+
+
+def _is_continuity_promote(args: argparse.Namespace) -> bool:
+    return bool(args.lane or args.summary or args.promotion_target or args.evidence or args.next_action)
+
+
+def cmd_checkpoint(args: argparse.Namespace) -> int:
+    try:
+        path = _write_continuity_from_args(args)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    print(json.dumps({"status": "ok", "checkpoint": str(path.relative_to(YGG_HOME))}, indent=2, ensure_ascii=False))
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
+    if args.continuity:
+        print(json.dumps(_continuity_payload(), indent=2, ensure_ascii=False))
+        return 0
     cmd = [sys.executable, str(RESUME_SCRIPT), "status"]
     if args.domain:
         cmd.append(_slugify(args.domain))
@@ -1782,6 +1870,36 @@ def cmd_forge(args: argparse.Namespace) -> int:
 
 
 def cmd_promote(args: argparse.Namespace) -> int:
+    if _is_continuity_promote(args):
+        if args.domain or args.task:
+            raise SystemExit("Continuity promote does not accept domain/task positional targets.")
+        if args.disposition not in PROMOTION_DISPOSITIONS:
+            allowed = ", ".join(sorted(PROMOTION_DISPOSITIONS))
+            raise SystemExit(f"Continuity promote requires one of: {allowed}")
+        if args.dry_run:
+            record = {
+                "lane": args.lane,
+                "summary": args.summary,
+                "disposition": args.disposition,
+                "promotion_target": args.promotion_target,
+                "evidence": args.evidence,
+                "next_action": args.next_action,
+            }
+            print("Ygg continuity promote dry-run")
+            print(json.dumps(record, indent=2, ensure_ascii=False))
+            return 0
+        try:
+            path = _write_continuity_from_args(args)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        print(json.dumps({"status": "ok", "promotion_checkpoint": str(path.relative_to(YGG_HOME))}, indent=2, ensure_ascii=False))
+        return 0
+
+    if not args.domain or not args.task:
+        raise SystemExit("Baton promote requires domain and task, or use --lane/--summary for continuity promote.")
+    if args.disposition not in {"no-promote", "log-daily", "promote-durable", "escalate-hitl"}:
+        raise SystemExit("Baton promote disposition must be one of: no-promote, log-daily, promote-durable, escalate-hitl")
+
     domain = _slugify(args.domain)
     task = _slugify(args.task)
     record = {
@@ -2042,23 +2160,42 @@ def build_parser() -> argparse.ArgumentParser:
     forge_p.add_argument("--print-packet", action="store_true", help="Print the planner packet instead of launching")
     forge_p.set_defaults(func=cmd_forge)
 
+    checkpoint_p = sub.add_parser("checkpoint", help="Write an SC continuity checkpoint into Ygg state")
+    checkpoint_p.add_argument("--lane", required=True, help="Continuity lane name")
+    checkpoint_p.add_argument("--summary", required=True, help="Short outcome summary")
+    checkpoint_p.add_argument(
+        "--disposition",
+        required=True,
+        choices=sorted(CONTINUITY_DISPOSITIONS),
+        help="Continuity disposition",
+    )
+    checkpoint_p.add_argument("--promotion-target", default="", help="Promotion target hint when disposition promotes")
+    checkpoint_p.add_argument("--evidence", default="", help="Short evidence reference")
+    checkpoint_p.add_argument("--next-action", default="", help="Suggested next action")
+    checkpoint_p.set_defaults(func=cmd_checkpoint)
+
     promote_p = sub.add_parser("promote", help="Record an explicit branch disposition / promotion event")
-    promote_p.add_argument("domain", help="Domain id/name")
-    promote_p.add_argument("task", help="Task id/name")
+    promote_p.add_argument("domain", nargs="?", help="Domain id/name")
+    promote_p.add_argument("task", nargs="?", help="Task id/name")
     promote_p.add_argument(
         "--disposition",
         required=True,
-        choices=["no-promote", "log-daily", "promote-durable", "escalate-hitl"],
         help="Disposition to record",
     )
     promote_p.add_argument("--note", help="Optional note explaining the disposition")
     promote_p.add_argument("--artifact", action="append", help="Artifact path/reference to include (repeatable)")
     promote_p.add_argument("--finish", action="store_true", help="Also mark the task finished in baton state")
     promote_p.add_argument("--dry-run", action="store_true", help="Print the promotion record/actions without writing them")
+    promote_p.add_argument("--lane", help="Continuity lane name for SC-compatible promote flow")
+    promote_p.add_argument("--summary", help="Continuity summary for SC-compatible promote flow")
+    promote_p.add_argument("--promotion-target", default="", help="Promotion target for SC-compatible promote flow")
+    promote_p.add_argument("--evidence", default="", help="Evidence note for SC-compatible promote flow")
+    promote_p.add_argument("--next-action", default="", help="Next action for SC-compatible promote flow")
     promote_p.set_defaults(func=cmd_promote)
 
     status_p = sub.add_parser("status", help="Inspect tracked baton state")
     status_p.add_argument("domain", nargs="?", help="Optional domain filter")
+    status_p.add_argument("--continuity", action="store_true", help="Show the latest SC continuity checkpoint instead of baton state")
     status_p.set_defaults(func=cmd_status)
 
     return parser
