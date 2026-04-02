@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-02T14:38:00-04:00",
+  "ideas": [
+    {
+      "id": "topology-aware-continuity-retrieval",
+      "title": "Topology-aware continuity retrieval",
+      "status": "incubating",
+      "summary": "Use topology-aware continuity retrieval over the current ecosystem instead of relying only on flat keyword, recency, or embedding recall.",
+      "claimTier": "plausible",
+      "origin": "Ian + Solace/Nyx",
+      "links": {
+        "checkpoints": [
+          "state/ygg/checkpoints/2026-03-27T21-41-12.361720+00-00_topological-memory.json"
+        ],
+        "promotionTargets": [
+          "docs/archive/topological_memory_continuity_retrieval_v0.md"
+        ],
+        "programs": [
+          "ygg-continuity-integration"
+        ]
+      },
+      "nextAction": "Build a 30-query benchmark against keyword, recency, and embedding baselines.",
+      "tags": [
+        "memory",
+        "retrieval",
+        "topology",
+        "continuity"
+      ],
+      "notes": []
+    }
+  ]
+}

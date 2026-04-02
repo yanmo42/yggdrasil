@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-02T14:38:00-04:00",
+  "programs": [
+    {
+      "id": "ygg-continuity-integration",
+      "title": "Ygg continuity integration",
+      "status": "active",
+      "kind": "productization",
+      "summary": "Integrate the existing semantic continuity kernel in ~/ygg with the new runtime continuity machinery and prepare Ygg for releaseable use with OpenClaw.",
+      "owner": "ian+ygg",
+      "priority": "high",
+      "relatedLanes": [
+        "continuity",
+        "topological-memory"
+      ],
+      "artifacts": [
+        "docs/OPENCLAW-INTEGRATION-AUDIT-2026-04-02.md",
+        "docs/CONTINUITY-SCHEMA-AND-OWNERSHIP-2026-04-02.md"
+      ],
+      "nextAction": "Promote Heimdall and Ratatoskr into ~/ygg, add runtime self template support, and wire semantic continuity around the new programs/ideas registries.",
+      "updatedFrom": "manual",
+      "notes": []
+    }
+  ]
+}

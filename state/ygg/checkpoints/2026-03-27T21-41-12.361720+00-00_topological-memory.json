@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-03-27T21:41:12.361720+00:00",
+  "lane": "topological-memory",
+  "summary": "Ratified bounded research direction: topology-aware continuity retrieval over the current ecosystem",
+  "disposition": "TODO_PROMOTE",
+  "promotion_target": "docs/archive/topological_memory_continuity_retrieval_v0.md",
+  "evidence": "Concept origin: Ian (2026-03-27); developed with Solace/Nyx; benchmark-first bounded framing established",
+  "next_action": "Build 30-query benchmark against keyword, recency, and embedding baselines"
+}
