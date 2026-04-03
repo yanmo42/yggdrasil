@@ -9,10 +9,33 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-from ygg.heimdall import append_daily_runtime_note, build_ratatoskr_event, main
+from ygg.heimdall import (
+    append_daily_runtime_note,
+    build_kernel_runtime_events,
+    build_ratatoskr_event,
+    main,
+)
 
 
 class HeimdallTests(unittest.TestCase):
+    def test_build_kernel_runtime_events_emits_refresh_and_changed(self) -> None:
+        changes = [("openclawVersion", "2026.4.0", "2026.4.1"), ("model", "old", "new")]
+        snapshot = {
+            "fingerprint": "abc123",
+            "sessionKey": "agent:claw:main",
+            "hostLabel": "not-ur-pc-pal",
+            "capturedAt": "2026-04-02T10:45:00-04:00",
+            "channel": "webchat",
+            "model": "new",
+        }
+        events = build_kernel_runtime_events(changes, snapshot)
+        self.assertEqual(2, len(events))
+        self.assertEqual("runtime.refresh", events[0]["kind"])
+        self.assertEqual("runtime.changed", events[1]["kind"])
+        self.assertEqual("important", events[1]["importance"])
+        self.assertEqual("agent:claw:main", events[1]["links"]["sessionKey"])
+        self.assertTrue(events[1]["route"]["daily"])
+
     def test_build_ratatoskr_event_marks_important_runtime_changes(self) -> None:
         changes = [("openclawVersion", "2026.4.0", "2026.4.1"), ("model", "old", "new")]
         snapshot = {
@@ -32,6 +55,8 @@ class HeimdallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             state_path = root / "state" / "runtime" / "ygg-self.json"
+            kernel_path = root / "state" / "runtime" / "ygg-kernel.json"
+            event_queue_path = root / "state" / "runtime" / "event-queue.jsonl"
             state_path.parent.mkdir(parents=True, exist_ok=True)
             state_path.write_text(
                 json.dumps(
@@ -47,6 +72,21 @@ class HeimdallTests(unittest.TestCase):
                             "node": "v25.8.0",
                             "fingerprint": "oldfingerprint",
                         }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            kernel_path.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": "0.1.0",
+                        "bootState": {
+                            "initializedAt": "2026-04-02T09:00:00-04:00",
+                            "lastReviewedAt": "2026-04-02T09:00:00-04:00",
+                            "lastWakeSummary": None,
+                            "lastEventId": None,
+                            "lastPromotionId": None,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -99,6 +139,12 @@ class HeimdallTests(unittest.TestCase):
             state = json.loads(state_path.read_text(encoding="utf-8"))
             snapshot = state["runtimeSnapshot"]
             history = state["runtimeHistory"]
+            queued_events = [
+                json.loads(line)
+                for line in event_queue_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            kernel_state = json.loads(kernel_path.read_text(encoding="utf-8"))
             self.assertEqual("new-host", snapshot["hostLabel"])
             self.assertEqual("2026.4.1", snapshot["openclawVersion"])
             self.assertEqual("da64a97", snapshot["build"])
@@ -106,6 +152,13 @@ class HeimdallTests(unittest.TestCase):
             self.assertEqual("2026-04-02T10:15:00-04:00", history["lastRefreshAt"])
             self.assertEqual("2026-04-02T10:15:00-04:00", history["lastMeaningfulChangeAt"])
             self.assertTrue(snapshot["fingerprint"])
+            self.assertEqual(2, len(queued_events))
+            self.assertEqual("runtime.refresh", queued_events[0]["kind"])
+            self.assertEqual("runtime.changed", queued_events[1]["kind"])
+            self.assertEqual(
+                queued_events[-1]["id"],
+                kernel_state["bootState"]["lastEventId"],
+            )
 
     def test_append_daily_runtime_note_dedupes_trailing_block(self) -> None:
         with tempfile.TemporaryDirectory() as td:

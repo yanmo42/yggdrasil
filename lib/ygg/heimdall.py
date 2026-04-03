@@ -34,6 +34,8 @@ MEANINGFUL_FIELDS = [
 ]
 
 DEFAULT_STATE_FILE = "state/runtime/ygg-self.json"
+DEFAULT_KERNEL_FILE = "state/runtime/ygg-kernel.json"
+DEFAULT_EVENT_QUEUE = "state/runtime/event-queue.jsonl"
 
 
 def _run_capture(command: list[str]) -> str | None:
@@ -226,6 +228,160 @@ def build_ratatoskr_event(changes: list[tuple[str, Any, Any]], snapshot: dict[st
     }
 
 
+def make_event_id(kind: str, timestamp: str) -> str:
+    safe_ts = timestamp.replace(":", "-")
+    safe_kind = kind.replace(".", "-")
+    return f"evt_{safe_ts}_{safe_kind}"
+
+
+def build_kernel_event(
+    *,
+    kind: str,
+    timestamp: str,
+    summary: str,
+    importance: str,
+    details: dict[str, Any],
+    snapshot: dict[str, Any],
+    route: dict[str, bool] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": make_event_id(kind, timestamp),
+        "kind": kind,
+        "timestamp": timestamp,
+        "source": "heimdall",
+        "importance": importance,
+        "summary": summary,
+        "details": details,
+        "route": route
+        or {
+            "daily": True,
+            "promote": False,
+            "notify": False,
+            "activeWork": False,
+        },
+        "links": {
+            "taskId": None,
+            "laneId": None,
+            "sessionKey": snapshot.get("sessionKey"),
+        },
+    }
+
+
+def build_kernel_runtime_events(
+    changes: list[tuple[str, Any, Any]],
+    snapshot: dict[str, Any],
+) -> list[dict[str, Any]]:
+    timestamp = snapshot.get("capturedAt") or now_iso_local()
+    change_items = [{"field": field, "old": old, "new": new} for field, old, new in changes]
+    important_fields = {"openclawVersion", "build", "model", "providerAuth", "hostLabel", "sessionKey"}
+    has_important_change = any(field in important_fields for field, _, _ in changes)
+
+    refresh_event = build_kernel_event(
+        kind="runtime.refresh",
+        timestamp=timestamp,
+        summary="Heimdall refreshed runtime embodiment snapshot.",
+        importance="routine",
+        details={
+            "fingerprint": snapshot.get("fingerprint"),
+            "capturedAt": timestamp,
+            "sessionKey": snapshot.get("sessionKey"),
+            "hostLabel": snapshot.get("hostLabel"),
+            "channel": snapshot.get("channel"),
+            "model": snapshot.get("model"),
+        },
+        snapshot=snapshot,
+    )
+
+    if changes:
+        changed_event = build_kernel_event(
+            kind="runtime.changed",
+            timestamp=timestamp,
+            summary="Runtime embodiment changed.",
+            importance="important" if has_important_change else "routine",
+            details={
+                "changes": change_items,
+                "fingerprint": snapshot.get("fingerprint"),
+                "capturedAt": timestamp,
+                "sessionKey": snapshot.get("sessionKey"),
+                "hostLabel": snapshot.get("hostLabel"),
+            },
+            snapshot=snapshot,
+        )
+    else:
+        changed_event = build_kernel_event(
+            kind="runtime.unchanged",
+            timestamp=timestamp,
+            summary="Runtime embodiment unchanged across meaningful fields.",
+            importance="routine",
+            details={
+                "fingerprint": snapshot.get("fingerprint"),
+                "capturedAt": timestamp,
+                "sessionKey": snapshot.get("sessionKey"),
+                "hostLabel": snapshot.get("hostLabel"),
+            },
+            snapshot=snapshot,
+        )
+
+    return [refresh_event, changed_event]
+
+
+def append_event_queue(path: Path, events: list[dict[str, Any]]) -> list[str]:
+    ensure_dir(path.parent)
+    existing_ids: set[str] = set()
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            event_id = payload.get("id")
+            if isinstance(event_id, str):
+                existing_ids.add(event_id)
+
+    appended_ids: list[str] = []
+    with path.open("a", encoding="utf-8") as fh:
+        for event in events:
+            event_id = event.get("id")
+            if not isinstance(event_id, str) or event_id in existing_ids:
+                continue
+            fh.write(json.dumps(event, separators=(",", ":")) + "\n")
+            appended_ids.append(event_id)
+            existing_ids.add(event_id)
+    return appended_ids
+
+
+def load_optional_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_optional_state(path: Path, state: dict[str, Any]) -> None:
+    ensure_dir(path.parent)
+    path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+
+def update_kernel_boot_state(
+    kernel_path: Path,
+    events: list[dict[str, Any]],
+    *,
+    appended_ids: list[str],
+    snapshot: dict[str, Any],
+) -> None:
+    kernel_state = load_optional_state(kernel_path)
+    boot_state = dict(kernel_state.get("bootState", {}))
+    timestamp = snapshot.get("capturedAt") or now_iso_local()
+    boot_state["lastReviewedAt"] = timestamp
+    boot_state["lastWakeSummary"] = "Heimdall refreshed runtime snapshot and emitted canonical kernel runtime events."
+    if appended_ids:
+        boot_state["lastEventId"] = appended_ids[-1]
+    kernel_state["bootState"] = boot_state
+    save_optional_state(kernel_path, kernel_state)
+
+
 def format_summary(changes: list[tuple[str, Any, Any]], snapshot: dict[str, Any]) -> str:
     if not changes:
         return (
@@ -259,6 +415,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--daily-dir",
         default=DEFAULT_DAILY_DIR,
         help="Daily note directory relative to workspace unless absolute.",
+    )
+    parser.add_argument(
+        "--kernel-file",
+        default=DEFAULT_KERNEL_FILE,
+        help="Path to kernel state JSON relative to workspace unless absolute.",
+    )
+    parser.add_argument(
+        "--event-queue",
+        default=DEFAULT_EVENT_QUEUE,
+        help="Path to append-only kernel event queue relative to workspace unless absolute.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Compute without writing state.")
     parser.add_argument("--note", action="store_true", help="Append a runtime note when meaningful fields changed.")
@@ -299,6 +465,8 @@ def main(argv: list[str] | None = None) -> int:
     workspace = Path(args.workspace).resolve()
     state_path = resolve_under_workspace(workspace, args.state_file)
     daily_dir = resolve_under_workspace(workspace, args.daily_dir)
+    kernel_path = resolve_under_workspace(workspace, args.kernel_file)
+    event_queue_path = resolve_under_workspace(workspace, args.event_queue)
 
     state = load_state(state_path)
     previous_snapshot = state.get("runtimeSnapshot", {})
@@ -338,8 +506,17 @@ def main(argv: list[str] | None = None) -> int:
     state["runtimeSnapshot"] = snapshot
     state["runtimeHistory"] = history
 
+    kernel_events = build_kernel_runtime_events(changes, snapshot)
+
     if not args.dry_run:
         save_state(state_path, state)
+        appended_ids = append_event_queue(event_queue_path, kernel_events)
+        update_kernel_boot_state(
+            kernel_path,
+            kernel_events,
+            appended_ids=appended_ids,
+            snapshot=snapshot,
+        )
         if args.note and changes:
             if args.ratatoskr:
                 event = build_ratatoskr_event(changes, snapshot)

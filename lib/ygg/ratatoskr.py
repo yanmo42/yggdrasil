@@ -8,7 +8,7 @@ from typing import Any
 from ygg.runtime_notes import append_daily_block, ensure_dir
 
 DEFAULT_DAILY_DIR = "state/notes/daily"
-DEFAULT_PROMOTION_FILE = "state/notes/promotion-candidates.md"
+DEFAULT_PROMOTION_FILE = "state/runtime/promotion-candidates.jsonl"
 
 
 def load_event_from_args(event_json: str | None, event_file: str | None) -> dict[str, Any]:
@@ -57,29 +57,61 @@ def build_daily_bullets(event: dict[str, Any]) -> list[str]:
     return bullets
 
 
+def build_promotion_candidate(event: dict[str, Any]) -> dict[str, Any]:
+    event_id = event.get("id")
+    timestamp = event.get("timestamp")
+    details = event.get("details") or {}
+    links = event.get("links") or {}
+    return {
+        "id": f"promo:{event_id}" if event_id else None,
+        "timestamp": timestamp,
+        "sourceEventId": event_id,
+        "kind": "memory.candidate.created",
+        "status": "candidate",
+        "importance": event.get("importance", "routine"),
+        "summary": event.get("summary", "(no summary)"),
+        "source": event.get("source"),
+        "eventKind": event.get("kind"),
+        "whyItMayBeDurable": [
+            "This event was explicitly routed for promotion review.",
+            "It may represent a durable continuity, architecture, or operational milestone.",
+        ],
+        "promotionTarget": "core/MEMORY.md",
+        "evidence": {
+            "details": details,
+            "links": links,
+        },
+        "review": {
+            "recommendedAction": "human-review",
+            "reviewAfter": timestamp,
+        },
+    }
+
+
 def append_promotion_candidate(path: Path, event: dict[str, Any]) -> Path:
     ensure_dir(path.parent)
-    heading = f"## {event.get('kind', 'event')} - {event.get('summary', '(no summary)')}"
-    lines = [heading]
-    if event.get("source"):
-        lines.append(f"- source: {event['source']}")
-    if event.get("importance"):
-        lines.append(f"- importance: {event['importance']}")
-    details = event.get("details") or {}
-    if details:
-        lines.append("- details:")
-        for key, value in details.items():
-            if isinstance(value, (dict, list)):
-                rendered = json.dumps(value, sort_keys=True)
-            else:
-                rendered = str(value)
-            lines.append(f"  - {key}: {rendered}")
-    block = "\n".join(lines) + "\n\n"
+    candidate = build_promotion_candidate(event)
+    candidate_id = candidate.get("id")
 
-    existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    if existing.endswith(block):
+    existing_ids: set[str] = set()
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            existing_id = payload.get("id")
+            if isinstance(existing_id, str):
+                existing_ids.add(existing_id)
+
+    if candidate_id and candidate_id in existing_ids:
         return path
-    path.write_text(existing + block, encoding="utf-8")
+
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(candidate, separators=(",", ":")) + "\n")
     return path
 
 
@@ -98,6 +130,7 @@ def route_event(
         "daily": None,
         "promotion": None,
         "summary": f"Ratatoskr routed {kind}",
+        "eventId": event.get("id"),
     }
 
     if route.get("daily"):
