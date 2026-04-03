@@ -1,0 +1,100 @@
+schema: ygg-kernel-manifest/v1
+profile: <archlinux-vm|laptop|server>
+updated_on: <YYYY-MM-DD>
+
+kernel:
+  name: ygg
+  distro_strategy: archlinux-bootstrap
+  canonical_control_plane_repo: <git-url-for-ygg>
+  canonical_protocol_repo: <git-url-for-tara>
+  canonical_spine_repo: <git-url-or-private-openclaw-workspace>
+  notes: >
+    Start with a reproducible Arch-first profile and bootstrap flow.
+    Do not turn runtime state and secrets into the kernel.
+
+components:
+  - id: ygg-control-plane
+    local_path: <ABS_PATH_TO_YGG>
+    role: control-plane
+    disposition: core
+    github_repo: <owner/ygg>
+    portability: ship
+    notes: Owns CLI, docs, bootstrap, state policy, and portable continuity logic.
+
+  - id: tara-contracts
+    local_path: <ABS_PATH_TO_TARA>
+    role: protocol-contracts
+    disposition: core-adjacent
+    github_repo: <owner/tara>
+    portability: ship
+    notes: Owns schemas/examples/validators for bounded inter-session transfer.
+
+  - id: openclaw-spine
+    local_path: <ABS_PATH_TO_OPENCLAW_WORKSPACE>
+    role: runtime-spine
+    disposition: private-runtime
+    github_repo: <private-or-none>
+    portability: extract-selectively
+    notes: Keep planner/resume/runtime ownership explicit; promote only stable modules.
+
+  - id: sandy-chaos
+    local_path: <ABS_PATH_TO_SANDY_CHAOS>
+    role: lab-bench
+    disposition: optional
+    github_repo: <owner/sandy-chaos>
+    portability: attach
+    notes: Useful for benchmarks, simulations, and experimentation; not part of the minimum kernel.
+
+  - id: operator-shell
+    local_path: <ABS_PATH_TO_ZSHRC_OR_DOTFILES>
+    role: operator-ux
+    disposition: template
+    github_repo: <owner/dotfiles-or-ygg>
+    portability: template-only
+    notes: Strip secrets and machine-specific values before commit.
+
+state_boundaries:
+  - path: <ABS_PATH_TO_OPENCLAW_MEMORY>
+    class: runtime-state
+    action: backup-not-git
+    notes: Live memory DBs are recoverable state, not portable source.
+
+  - path: <ABS_PATH_TO_YGG_STATE_RUNTIME>
+    class: runtime-state
+    action: gitignored
+    notes: Runtime outputs stay local; commit only templates and policy.
+
+  - path: <ABS_PATH_TO_CACHE_DIRS>
+    class: disposable
+    action: ignore
+    notes: Rebuild from package/bootstrap manifests.
+
+secret_surfaces:
+  - path: <ABS_PATH_TO_ZSHRC>
+    reason: plaintext tokens or env exports may be present
+    action: move-to-env-overlay
+
+  - path: <ABS_PATH_TO_OPENCLAW_JSON>
+    reason: provider/auth state
+    action: keep-local
+
+  - path: <ABS_PATH_TO_AUTH_FILES>
+    reason: machine credentials
+    action: keep-local
+
+bootstrap_layers:
+  - layer: packages
+    source: machine/bootstrap-host.sh
+    goal: install base OS packages and CLI tooling
+
+  - layer: path-contract
+    source: state/templates/ygg-paths.yaml.template
+    goal: declare canonical local roots
+
+  - layer: operator-profile
+    source: template-candidate dotfiles
+    goal: restore shell, prompt, aliases, and user units
+
+  - layer: runtime-adapters
+    source: openclaw/spine integration docs
+    goal: reconnect private runtime surfaces without committing them

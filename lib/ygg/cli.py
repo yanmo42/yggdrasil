@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -21,6 +22,14 @@ from ygg.continuity import (
     load_latest_checkpoint,
     write_checkpoint as write_continuity_checkpoint,
 )
+from ygg.bootstrap_registry import (
+    load_registry,
+    parse_profile_env,
+    read_package_manifest,
+    render_path_contract,
+    resolve_registry_assignments,
+)
+from ygg.heimdall import main as heimdall_main
 from ygg.path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
 from ygg.ravens_v1 import (
     adjudicate_flight,
@@ -36,6 +45,7 @@ from ygg.ravens_v1 import (
     record_aviary_exchange,
     record_probe,
 )
+from ygg.ratatoskr import main as ratatoskr_main
 
 HOME = Path.home()
 RUNTIME_PATHS: RuntimePaths = resolve_runtime_paths()
@@ -53,6 +63,9 @@ WORKSPACE_PERSONA_MODE_FILE = WORKSPACE / "state" / "persona-mode.json"
 RAVEN_STATE_DIR = STATE_DIR
 DEFAULT_SESSION = "planner--main"
 DEFAULT_OPENCLAW_BIN = "openclaw"
+PROFILE_DIR = YGG_HOME / "state" / "profiles"
+DEFAULT_BOOTSTRAP_PROFILE = os.environ.get("BOOTSTRAP_PROFILE", "stable")
+DEFAULT_COMPONENT_REGISTRY = PROFILE_DIR / "components.yaml"
 
 if str(WORKSPACE) not in sys.path:
     sys.path.insert(0, str(WORKSPACE))
@@ -110,6 +123,18 @@ EXPLAIN_CARDS = {
         ],
         "examples": ["ygg paths", "ygg paths check", "ygg paths check --json"],
         "next": ["status", "work"],
+    },
+    "bootstrap": {
+        "purpose": "Inspect the resolved bootstrap profile, component registry, package manifests, and rendered path-contract preview.",
+        "when_to_use": [
+            "When you want to see what a stable/dev bootstrap would actually do before running it.",
+            "When reviewing component roots, refs, enablement, or package manifests from inside Ygg.",
+        ],
+        "examples": [
+            "ygg bootstrap inspect",
+            "ygg bootstrap inspect --profile dev --json",
+        ],
+        "next": ["paths", "status", "work"],
     },
     "root": {
         "purpose": "Force direct planner-spine entry with no aggressive route guess.",
@@ -264,6 +289,30 @@ EXPLAIN_CARDS = {
         ],
         "next": ["suggest", "work", "mode"],
     },
+    "heimdall": {
+        "purpose": "Refresh Ygg's runtime embodiment snapshot and optionally write or route a continuity note.",
+        "when_to_use": [
+            "After host, model, session, or environment changes.",
+            "When you want the runtime self snapshot updated under Ygg-owned state.",
+        ],
+        "examples": [
+            "ygg heimdall --show-json",
+            "ygg heimdall --note --ratatoskr",
+        ],
+        "next": ["ratatoskr", "status", "checkpoint"],
+    },
+    "ratatoskr": {
+        "purpose": "Route structured continuity events into Ygg-owned note and promotion sinks.",
+        "when_to_use": [
+            "When you already have a structured event payload to route.",
+            "When you want Ygg-local daily and promotion note surfaces instead of assistant-home defaults.",
+        ],
+        "examples": [
+            "ygg ratatoskr --event-file /tmp/event.json",
+            "ygg ratatoskr --event-json '{\"kind\":\"runtime-refresh\",\"route\":{\"daily\":true}}' --dry-run",
+        ],
+        "next": ["heimdall", "checkpoint", "promote"],
+    },
 }
 
 VERB_CONTRACTS = {
@@ -300,6 +349,22 @@ VERB_CONTRACTS = {
         "calls": ["path_contract.resolve_runtime_paths", "path_contract.validate_runtime_paths"],
         "guarantees": ["shows resolved paths and supports validation checks"],
         "fails_when": ["check mode returns non-zero when required paths are invalid"],
+    },
+    "bootstrap": {
+        "mutates_state": False,
+        "requires": ["inspect"],
+        "optional": ["--profile", "--registry", "--json"],
+        "writes": [],
+        "calls": ["bootstrap_registry.resolve_registry_assignments", "bootstrap_registry.render_path_contract"],
+        "guarantees": [
+            "shows the resolved bootstrap profile and component graph",
+            "shows package manifests and resolved Arch package list",
+            "shows the rendered path-contract preview from the same registry source",
+        ],
+        "fails_when": [
+            "profile file is missing",
+            "component registry file is missing or invalid",
+        ],
     },
     "root": {
         "mutates_state": "indirect",
@@ -528,6 +593,67 @@ VERB_CONTRACTS = {
         "fails_when": [
             "workspace planner/router imports are unavailable for request interpretation",
             "OpenClaw session notification fails when notification is requested",
+        ],
+    },
+    "heimdall": {
+        "mutates_state": True,
+        "requires": [],
+        "optional": [
+            "--workspace",
+            "--state-file",
+            "--daily-dir",
+            "--dry-run",
+            "--note",
+            "--show-json",
+            "--ratatoskr",
+            "--timezone",
+            "--channel",
+            "--chat-type",
+            "--runtime-core",
+            "--session-key",
+            "--openclaw-version",
+            "--build",
+            "--model",
+            "--provider-auth",
+            "--host-label",
+            "--os-kernel",
+            "--shell",
+            "--node",
+            "--reasoning",
+            "--elevation",
+        ],
+        "writes": [
+            "~/ygg/state/runtime/ygg-self.json",
+            "~/ygg/state/notes/daily/*.md (when --note)",
+        ],
+        "calls": ["heimdall.build_runtime_snapshot", "ratatoskr.route_event (optional)"],
+        "guarantees": [
+            "updates Ygg-owned runtime embodiment state",
+            "preserves runtime history with fingerprint tracking",
+            "can hand meaningful changes to Ratatoskr instead of writing a direct note",
+        ],
+        "fails_when": [
+            "state file path is not writable",
+            "ratatoskr handoff payload is invalid",
+        ],
+    },
+    "ratatoskr": {
+        "mutates_state": True,
+        "requires": ["--event-json or --event-file"],
+        "optional": ["--workspace", "--daily-dir", "--promotion-file", "--dry-run", "--show-event"],
+        "writes": [
+            "~/ygg/state/notes/daily/*.md",
+            "~/ygg/state/notes/promotion-candidates.md",
+        ],
+        "calls": ["ratatoskr.route_event"],
+        "guarantees": [
+            "routes structured continuity events into Ygg-owned sinks",
+            "supports dry-run inspection without writes",
+            "preserves event payload details in routed outputs",
+        ],
+        "fails_when": [
+            "no event payload is provided",
+            "event JSON cannot be parsed",
         ],
     },
 }
@@ -1511,6 +1637,192 @@ def cmd_paths(args: argparse.Namespace) -> int:
     return 0 if check.get("ok") else 1
 
 
+def _resolve_profile_file(profile: str) -> Path:
+    requested = (profile or DEFAULT_BOOTSTRAP_PROFILE).strip()
+    if "/" in requested or requested.startswith("."):
+        return Path(requested).expanduser().resolve()
+    return (PROFILE_DIR / f"bootstrap-profile.{requested}.env").resolve()
+
+
+def _resolve_asset_path(raw: str) -> Path:
+    path = Path(raw).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    return (YGG_HOME / path).resolve()
+
+
+def _bootstrap_payload(profile: str, registry: Path) -> dict[str, object]:
+    profile_file = _resolve_profile_file(profile)
+    if not profile_file.exists():
+        raise SystemExit(f"Bootstrap profile not found: {profile_file}")
+    if not registry.exists():
+        raise SystemExit(f"Component registry not found: {registry}")
+
+    profile_env = parse_profile_env(profile_file)
+    resolved_env = {**profile_env, **os.environ}
+    assignments = resolve_registry_assignments(registry, profile=profile, env=resolved_env)
+    registry_data = load_registry(registry)
+    components_cfg = registry_data.get("components", {})
+
+    manifests_raw = resolved_env.get("PACMAN_PACKAGE_MANIFESTS", "state/profiles/arch-packages.base.txt")
+    manifest_paths = [_resolve_asset_path(item) for item in manifests_raw.split(":") if item.strip()]
+    packages: list[str] = []
+    seen: set[str] = set()
+    for manifest_path in manifest_paths:
+        for package in read_package_manifest(manifest_path):
+            if package in seen:
+                continue
+            seen.add(package)
+            packages.append(package)
+
+    component_rows: list[dict[str, object]] = []
+    if isinstance(components_cfg, dict):
+        for component_id, component in components_cfg.items():
+            if not isinstance(component, dict):
+                continue
+            component_rows.append(
+                {
+                    "id": str(component_id),
+                    "label": component.get("label", component_id),
+                    "root": assignments.get(str(component.get("env_root", "")).strip(), ""),
+                    "url": assignments.get(str(component.get("env_url", "")).strip(), ""),
+                    "ref": assignments.get(str(component.get("env_ref", "")).strip(), ""),
+                    "enabled": assignments.get(str(component.get("env_enabled", "")).strip(), "0") == "1",
+                }
+            )
+
+    workspace_root = assignments.get("WORKSPACE_ROOT") or str(WORKSPACE)
+    contract_path = str(Path(workspace_root).expanduser() / "config" / "ygg-paths.yaml")
+    path_contract_preview = render_path_contract(
+        registry,
+        profile=profile,
+        contract_path=contract_path,
+        env=resolved_env,
+    )
+
+    return {
+        "profile": {"name": profile, "file": str(profile_file)},
+        "registry": {
+            "path": str(registry),
+            "schema": assignments.get("COMPONENT_REGISTRY_SCHEMA", ""),
+        },
+        "manifests": [str(path) for path in manifest_paths],
+        "packages": packages,
+        "components": component_rows,
+        "assignments": assignments,
+        "path_contract_preview": path_contract_preview,
+    }
+
+
+def _print_bootstrap_text(payload: dict[str, object]) -> None:
+    profile = payload["profile"]
+    registry = payload["registry"]
+
+    print("Ygg bootstrap inspect\n")
+    print(f"profile: {profile['name']}")
+    print(f"profile file: {profile['file']}")
+    print(f"registry: {registry['path']}")
+    print(f"registry schema: {registry['schema']}")
+
+    manifests = payload.get("manifests") or []
+    if manifests:
+        print("\npackage manifests:")
+        for path in manifests:
+            print(f"- {path}")
+
+    packages = payload.get("packages") or []
+    if packages:
+        print(f"\npackages ({len(packages)}):")
+        print("- " + ", ".join(packages))
+
+    components = payload.get("components") or []
+    if components:
+        print("\ncomponents:")
+        for row in components:
+            enabled = "enabled" if row.get("enabled") else "disabled"
+            print(
+                f"- {row.get('id')} [{enabled}] root={row.get('root')} ref={row.get('ref') or '(none)'}"
+            )
+            if row.get("url"):
+                print(f"  url: {row['url']}")
+
+    preview = str(payload.get("path_contract_preview", "")).rstrip()
+    if preview:
+        print("\npath contract preview:")
+        print(preview)
+
+
+def cmd_bootstrap_inspect(args: argparse.Namespace) -> int:
+    profile = args.profile or DEFAULT_BOOTSTRAP_PROFILE
+    registry = _resolve_asset_path(args.registry)
+    payload = _bootstrap_payload(profile, registry)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_bootstrap_text(payload)
+    return 0
+
+
+def cmd_heimdall(args: argparse.Namespace) -> int:
+    argv = [
+        "--workspace",
+        str(args.workspace),
+        "--state-file",
+        args.state_file,
+        "--daily-dir",
+        args.daily_dir,
+    ]
+    for flag_name, cli_flag in (
+        ("dry_run", "--dry-run"),
+        ("note", "--note"),
+        ("show_json", "--show-json"),
+        ("ratatoskr", "--ratatoskr"),
+    ):
+        if getattr(args, flag_name):
+            argv.append(cli_flag)
+    for attr, flag in (
+        ("timezone", "--timezone"),
+        ("channel", "--channel"),
+        ("chatType", "--chat-type"),
+        ("runtimeCore", "--runtime-core"),
+        ("sessionKey", "--session-key"),
+        ("openclawVersion", "--openclaw-version"),
+        ("build", "--build"),
+        ("model", "--model"),
+        ("providerAuth", "--provider-auth"),
+        ("hostLabel", "--host-label"),
+        ("osKernel", "--os-kernel"),
+        ("shell", "--shell"),
+        ("node", "--node"),
+        ("reasoning", "--reasoning"),
+        ("elevation", "--elevation"),
+    ):
+        value = getattr(args, attr)
+        if value is not None:
+            argv.extend([flag, str(value)])
+    return heimdall_main(argv)
+
+
+def cmd_ratatoskr(args: argparse.Namespace) -> int:
+    argv = [
+        "--workspace",
+        str(args.workspace),
+        "--daily-dir",
+        args.daily_dir,
+        "--promotion-file",
+        args.promotion_file,
+    ]
+    if args.event_json:
+        argv.extend(["--event-json", args.event_json])
+    if args.event_file:
+        argv.extend(["--event-file", args.event_file])
+    if args.dry_run:
+        argv.append("--dry-run")
+    if args.show_event:
+        argv.append("--show-event")
+    return ratatoskr_main(argv)
+
+
 def _print_raven_status(rows: list[dict]) -> None:
     print("RAVENS flights\n")
     if not rows:
@@ -2002,6 +2314,49 @@ def build_parser() -> argparse.ArgumentParser:
     paths_p.add_argument("--paths-file", help="Explicit path-contract file path")
     paths_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     paths_p.set_defaults(func=cmd_paths)
+
+    bootstrap_p = sub.add_parser("bootstrap", help="Inspect Ygg bootstrap profile and component resolution")
+    bootstrap_sub = bootstrap_p.add_subparsers(dest="bootstrap_cmd", required=True)
+    bootstrap_inspect_p = bootstrap_sub.add_parser("inspect", help="Show resolved bootstrap profile, components, packages, and path contract preview")
+    bootstrap_inspect_p.add_argument("--profile", default=DEFAULT_BOOTSTRAP_PROFILE, help=f"Bootstrap profile name or file (default: {DEFAULT_BOOTSTRAP_PROFILE})")
+    bootstrap_inspect_p.add_argument("--registry", default="state/profiles/components.yaml", help="Component registry path relative to Ygg root unless absolute")
+    bootstrap_inspect_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    bootstrap_inspect_p.set_defaults(func=cmd_bootstrap_inspect)
+
+    heimdall_p = sub.add_parser("heimdall", help="Refresh Ygg-owned runtime embodiment state")
+    heimdall_p.add_argument("--workspace", default=str(YGG_HOME), help="Workspace root (default: Ygg root)")
+    heimdall_p.add_argument("--state-file", default="state/runtime/ygg-self.json", help="Runtime self snapshot path relative to workspace unless absolute")
+    heimdall_p.add_argument("--daily-dir", default="state/notes/daily", help="Daily note directory relative to workspace unless absolute")
+    heimdall_p.add_argument("--dry-run", action="store_true", help="Compute without writing state")
+    heimdall_p.add_argument("--note", action="store_true", help="Append a runtime note when meaningful fields changed")
+    heimdall_p.add_argument("--show-json", action="store_true", help="Print resulting JSON snapshot")
+    heimdall_p.add_argument("--ratatoskr", action="store_true", help="Route meaningful changes through Ratatoskr instead of direct note writing")
+    heimdall_p.add_argument("--timezone")
+    heimdall_p.add_argument("--channel")
+    heimdall_p.add_argument("--chat-type", dest="chatType")
+    heimdall_p.add_argument("--runtime-core", dest="runtimeCore")
+    heimdall_p.add_argument("--session-key", dest="sessionKey")
+    heimdall_p.add_argument("--openclaw-version", dest="openclawVersion")
+    heimdall_p.add_argument("--build")
+    heimdall_p.add_argument("--model")
+    heimdall_p.add_argument("--provider-auth", dest="providerAuth")
+    heimdall_p.add_argument("--host-label", dest="hostLabel")
+    heimdall_p.add_argument("--os-kernel", dest="osKernel")
+    heimdall_p.add_argument("--shell")
+    heimdall_p.add_argument("--node")
+    heimdall_p.add_argument("--reasoning")
+    heimdall_p.add_argument("--elevation")
+    heimdall_p.set_defaults(func=cmd_heimdall)
+
+    ratatoskr_p = sub.add_parser("ratatoskr", help="Route structured continuity events into Ygg-owned sinks")
+    ratatoskr_p.add_argument("--workspace", default=str(YGG_HOME), help="Workspace root (default: Ygg root)")
+    ratatoskr_p.add_argument("--event-json", help="Inline JSON event payload")
+    ratatoskr_p.add_argument("--event-file", help="Path to JSON event payload")
+    ratatoskr_p.add_argument("--daily-dir", default="state/notes/daily", help="Daily note directory relative to workspace unless absolute")
+    ratatoskr_p.add_argument("--promotion-file", default="state/notes/promotion-candidates.md", help="Promotion note path relative to workspace unless absolute")
+    ratatoskr_p.add_argument("--dry-run", action="store_true", help="Show routing result without writing")
+    ratatoskr_p.add_argument("--show-event", action="store_true", help="Print the event payload instead of the routing result")
+    ratatoskr_p.set_defaults(func=cmd_ratatoskr)
 
     raven_p = sub.add_parser("raven", help="RAVENS v1 flight operations")
     raven_sub = raven_p.add_subparsers(dest="raven_cmd", required=True)

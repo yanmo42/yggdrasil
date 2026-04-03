@@ -177,6 +177,8 @@ Current verbs:
 - `ygg promote`
 - `ygg status`
 - `ygg mode`
+- `ygg heimdall`
+- `ygg ratatoskr`
 
 ---
 
@@ -187,6 +189,9 @@ ygg --help
 ygg explain suggest
 ygg paths check
 ygg suggest "implement the improved theme selector UX"
+ygg heimdall --show-json
+ygg heimdall --note --ratatoskr
+ygg ratatoskr --event-file /tmp/event.json
 ygg raven launch "inspect environment drift"
 ygg raven status
 ygg status

@@ -1,0 +1,3 @@
+# Stable channel packages: useful but still fairly restrained.
+chromium
+htop

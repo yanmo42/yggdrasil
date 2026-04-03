@@ -1,0 +1,6 @@
+# Dev channel packages: broader workstation surface.
+chromium
+htop
+btop
+shellcheck
+python-pytest

@@ -1,0 +1,19 @@
+# Shared Arch packages for every Ygg bootstrap profile.
+git
+curl
+jq
+rsync
+python
+python-pip
+nodejs
+npm
+neovim
+ripgrep
+fd
+fzf
+zoxide
+eza
+bat
+starship
+tmux
+github-cli

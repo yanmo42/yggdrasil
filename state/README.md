@@ -8,6 +8,11 @@ This package defines the state boundary for portability.
 - `runtime/` → generated runtime outputs (ignored)
 - `notes/` → generated operational notes (ignored)
 
+Helpful templates:
+
+- `state/templates/ygg-self.example.json` → runtime embodiment snapshot shape
+- `state/templates/shell-secrets.env.example` → local-only shell secret exports; copy outside git
+
 ## Scripts
 
 ```bash

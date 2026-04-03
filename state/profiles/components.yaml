@@ -1,0 +1,106 @@
+schema: ygg-components/v1
+
+variables:
+  projects-root:
+    env: PROJECTS_ROOT
+    default: ~/projects
+
+path_contract:
+  canonical_state_owner: spine
+  work_repos_root_env: PROJECTS_ROOT
+  branch_backflow: Durable outcomes from repos should be promoted back into spine memory/state.
+  spine:
+    component: spine
+    config_dir: "{root}/config"
+    memory_dir: "{root}/memory"
+    backups_dir: "{root}/backups"
+  control_plane:
+    component: ygg
+    name: ygg
+    bin: "{root}/bin/ygg"
+  work_repos:
+    components:
+      tara: tara
+      sandy-chaos: sandy-chaos
+      ianmoog-site: ianmoog-site
+
+components:
+  spine:
+    label: spine workspace
+    env_root: WORKSPACE_ROOT
+    env_url: SPINE_GIT_URL
+    env_ref: SPINE_GIT_REF
+    env_enabled: ENABLE_SPINE
+    default_root: ~/.openclaw/workspace-claw-main
+    default_url: ""
+    default_ref: main
+    default_enabled: true
+    profiles:
+      stable:
+        enabled: true
+      dev:
+        enabled: true
+
+  ygg:
+    label: ygg
+    env_root: YGG_ROOT
+    env_url: YGG_GIT_URL
+    env_ref: YGG_GIT_REF
+    env_enabled: ENABLE_YGG
+    default_root: ~/ygg
+    default_url: ""
+    default_ref: main
+    default_enabled: true
+    profiles:
+      stable:
+        enabled: true
+      dev:
+        enabled: true
+
+  tara:
+    label: tara
+    env_root: TARA_ROOT
+    env_url: TARA_GIT_URL
+    env_ref: TARA_GIT_REF
+    env_enabled: ENABLE_TARA
+    default_root: ~/tara
+    default_url: ""
+    default_ref: main
+    default_enabled: true
+    profiles:
+      stable:
+        enabled: true
+      dev:
+        enabled: true
+
+  sandy-chaos:
+    label: sandy-chaos
+    env_root: SANDY_ROOT
+    env_url: SANDY_CHAOS_GIT_URL
+    env_ref: SANDY_CHAOS_GIT_REF
+    env_enabled: ENABLE_SANDY_CHAOS
+    default_root: ${PROJECTS_ROOT}/sandy-chaos
+    default_url: ""
+    default_ref: main
+    default_enabled: true
+    profiles:
+      stable:
+        enabled: false
+      dev:
+        enabled: true
+
+  ianmoog-site:
+    label: ianmoog-site
+    env_root: SITE_ROOT
+    env_url: IANMOOG_SITE_GIT_URL
+    env_ref: IANMOOG_SITE_GIT_REF
+    env_enabled: ENABLE_IANMOOG_SITE
+    default_root: ${PROJECTS_ROOT}/ianmoog-site
+    default_url: ""
+    default_ref: main
+    default_enabled: false
+    profiles:
+      stable:
+        enabled: false
+      dev:
+        enabled: true
