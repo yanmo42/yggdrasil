@@ -206,6 +206,85 @@ For usage details, read:
 
 ---
 
+## Start here
+
+If you are new to Ygg, learn these first.
+
+### The 5-command loop
+
+This is the shortest path to using Ygg effectively:
+
+```bash
+ygg inventory
+ygg status
+ygg suggest "what I want"
+ygg resume <domain> <task>
+ygg forge --domain <domain> --task <task> "build the next thing"
+```
+
+### 10 most useful commands
+
+1. `ygg inventory` — see what Ygg actually has right now.
+2. `ygg status` — see what lanes/tasks are active.
+3. `ygg suggest "..."` — turn a fuzzy request into likely Ygg commands.
+4. `ygg root "..."` — stay in planner/spine mode when things are ambiguous.
+5. `ygg work "..."` — use the flexible natural-language front door.
+6. `ygg branch <domain> <task> ...` — create or refresh a tracked lane.
+7. `ygg resume <domain> <task>` — reopen a known lane with continuity.
+8. `ygg forge --domain <domain> --task <task> "..."` — push a lane toward implementation.
+9. `ygg checkpoint ...` — record a structured continuity checkpoint.
+10. `ygg paths` — inspect the path contract so you know what lives where.
+
+### Common situations
+
+**I feel lost**
+
+```bash
+ygg inventory
+ygg status
+```
+
+**I know what I want, but not which command to use**
+
+```bash
+ygg suggest "continue the continuity integration work"
+```
+
+**I want to create a clean new lane**
+
+```bash
+ygg branch continuity inventory-surface \
+  --objective "Build executable repo inventory for ygg" \
+  --next-action "Add first query command"
+```
+
+**I want to pick up existing work**
+
+```bash
+ygg resume continuity inventory-surface
+```
+
+**I want to stop planning and build**
+
+```bash
+ygg forge --domain continuity --task inventory-surface \
+  "implement the next useful query/edit command"
+```
+
+### Ignore these at first
+
+Until the core loop feels natural, most people can ignore:
+
+- `ygg raven`
+- `ygg graft`
+- `ygg beak`
+- `ygg mode`
+- `ygg nyx`
+- `ygg heimdall`
+- `ygg ratatoskr`
+
+---
+
 ## Design intent
 
 The point of this directory is not just convenience.
