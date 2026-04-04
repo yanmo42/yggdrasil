@@ -30,6 +30,7 @@ from ygg.bootstrap_registry import (
     resolve_registry_assignments,
 )
 from ygg.heimdall import main as heimdall_main
+from ygg.inventory import build_repo_inventory
 from ygg.path_contract import RuntimePaths, resolve_runtime_paths, runtime_payload, validate_runtime_paths
 from ygg.ravens_v1 import (
     adjudicate_flight,
@@ -135,6 +136,19 @@ EXPLAIN_CARDS = {
             "ygg bootstrap inspect --profile dev --json",
         ],
         "next": ["paths", "status", "work"],
+    },
+    "inventory": {
+        "purpose": "Produce a structured inventory of the Ygg repo itself: implemented systems, bridges, state surfaces, speculative tracks, and next build targets.",
+        "when_to_use": [
+            "When the repo feels overgrown and you need an executable map instead of more theory.",
+            "When deciding what is implemented, partial, bridge-owned, or still speculative.",
+        ],
+        "examples": [
+            "ygg inventory",
+            "ygg inventory --json",
+            "ygg inventory --root ~/ygg",
+        ],
+        "next": ["status", "bootstrap", "paths"],
     },
     "root": {
         "purpose": "Force direct planner-spine entry with no aggressive route guess.",
@@ -364,6 +378,22 @@ VERB_CONTRACTS = {
         "fails_when": [
             "profile file is missing",
             "component registry file is missing or invalid",
+        ],
+    },
+    "inventory": {
+        "mutates_state": False,
+        "requires": [],
+        "optional": ["--root", "--json"],
+        "writes": [],
+        "calls": ["inventory.build_repo_inventory"],
+        "guarantees": [
+            "reports implemented systems, bridges, state surfaces, speculative tracks, and next build targets",
+            "never mutates repo or runtime state",
+            "returns machine-readable JSON when requested",
+        ],
+        "fails_when": [
+            "root path does not exist",
+            "inventory root is not readable",
         ],
     },
     "root": {
@@ -1763,6 +1793,72 @@ def cmd_bootstrap_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_inventory_text(payload: dict[str, object]) -> None:
+    summary = payload["summary"]
+    print("Ygg inventory\n")
+    print(f"root: {payload['root']}")
+    print(
+        "summary: "
+        f"implemented={summary['implementedCount']} "
+        f"partial={summary['partialCount']} "
+        f"speculative={summary['speculativeCount']} "
+        f"bridges={summary['bridgeCount']} "
+        f"programs={summary['programCount']} "
+        f"ideas={summary['ideaCount']}"
+    )
+
+    systems = payload.get("systems") or []
+    if systems:
+        print("\nimplemented / partial systems:")
+        for row in systems:
+            commands = ", ".join(row.get("commands") or []) or "(none)"
+            print(f"- [{row['status']}] {row['title']} ({row['id']})")
+            print(f"  {row['summary']}")
+            print(f"  commands: {commands}")
+
+    bridges = payload.get("bridges") or []
+    if bridges:
+        print("\nbridge surfaces:")
+        for row in bridges:
+            print(f"- {row['relativePath']} [{row['kind']}]")
+            if row.get("reason"):
+                print(f"  {row['reason']}")
+
+    state_surfaces = payload.get("stateSurfaces") or []
+    if state_surfaces:
+        print("\nstate surfaces:")
+        for row in state_surfaces:
+            print(f"- {row['relativePath']} [{row['kind']}]")
+            if row.get("reason"):
+                print(f"  {row['reason']}")
+
+    speculative = payload.get("speculativeTracks") or []
+    if speculative:
+        print("\nspeculative tracks:")
+        for row in speculative:
+            print(f"- {row['title']} ({row['id']})")
+            print(f"  {row['summary']}")
+
+    next_targets = payload.get("nextTargets") or []
+    if next_targets:
+        print("\nnext targets:")
+        for row in next_targets:
+            print(f"- [{row['priority']}] {row['title']} ({row['id']})")
+            print(f"  {row['why']}")
+
+
+def cmd_inventory(args: argparse.Namespace) -> int:
+    root = Path(args.root).expanduser().resolve()
+    if not root.exists():
+        raise SystemExit(f"Inventory root does not exist: {root}")
+    payload = build_repo_inventory(root)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_inventory_text(payload)
+    return 0
+
+
 def cmd_heimdall(args: argparse.Namespace) -> int:
     argv = [
         "--workspace",
@@ -2322,6 +2418,11 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap_inspect_p.add_argument("--registry", default="state/profiles/components.yaml", help="Component registry path relative to Ygg root unless absolute")
     bootstrap_inspect_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     bootstrap_inspect_p.set_defaults(func=cmd_bootstrap_inspect)
+
+    inventory_p = sub.add_parser("inventory", help="Inventory the Ygg repo itself: systems, bridges, state surfaces, and next targets")
+    inventory_p.add_argument("--root", default=str(YGG_HOME), help="Repo root to inventory (default: current Ygg root)")
+    inventory_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    inventory_p.set_defaults(func=cmd_inventory)
 
     heimdall_p = sub.add_parser("heimdall", help="Refresh Ygg-owned runtime embodiment state")
     heimdall_p.add_argument("--workspace", default=str(YGG_HOME), help="Workspace root (default: Ygg root)")

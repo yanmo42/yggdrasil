@@ -167,6 +167,7 @@ Current verbs:
 - `ygg suggest`
 - `ygg work`
 - `ygg paths`
+- `ygg inventory`
 - `ygg raven` (`launch`, `status`, `inspect`, `return`, `adjudicate`)
 - `ygg graft` (`propose`)
 - `ygg beak` (`propose`)
@@ -189,6 +190,7 @@ ygg --help
 ygg explain suggest
 ygg paths check
 ygg suggest "implement the improved theme selector UX"
+ygg inventory
 ygg heimdall --show-json
 ygg heimdall --note --ratatoskr
 ygg ratatoskr --event-file /tmp/event.json

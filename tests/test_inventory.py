@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-from ygg.inventory import build_inventory
+from ygg.inventory import build_inventory, build_repo_inventory
 
 
 class TestHostInventory(unittest.TestCase):
@@ -123,6 +123,79 @@ class TestHostInventory(unittest.TestCase):
             repo_paths = {row["relativePath"] for row in payload["gitRepos"]}
             self.assertIn("ygg", repo_paths)
             self.assertIn("projects/nyx-nlp", repo_paths)
+
+
+    def test_repo_inventory_reports_systems_bridges_and_next_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for relative in [
+                "state/ygg/checkpoints",
+            ]:
+                (root / relative).mkdir(parents=True, exist_ok=True)
+
+            for relative in [
+                "lib/ygg/cli.py",
+                "bin/ygg",
+                "commands/README.md",
+                "README.md",
+                "lib/ygg/continuity.py",
+                "state/ygg/programs.json",
+                "state/ygg/ideas.json",
+                "lib/ygg/heimdall.py",
+                "lib/ygg/ratatoskr.py",
+                "state/runtime/promotions.jsonl",
+                "state/notes/promotions.md",
+                "lib/ygg/path_contract.py",
+                "lib/ygg/bootstrap_registry.py",
+                "state/templates/ygg-paths.yaml.template",
+                "state/profiles/components.yaml",
+                "lib/ygg/ravens_v1.py",
+                "docs/RAVENS.md",
+                "docs/RAVENS-V1.md",
+                "state/README.md",
+                "state/policy/STATE-BOUNDARY.md",
+                "state/scripts/spine-backup.sh",
+                "state/scripts/spine-restore.sh",
+                "tests/test_contracts.py",
+                "tests/test_continuity.py",
+                "tests/test_heimdall.py",
+                "tests/test_ratatoskr.py",
+                "tests/test_bootstrap_inspect.py",
+                "tests/test_bootstrap_profiles.py",
+                "tests/test_bootstrap_registry.py",
+                "tests/test_ravens.py",
+                "docs/ROADMAP.md",
+                "docs/NORTH-STAR.md",
+            ]:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("x\n", encoding="utf-8")
+
+            links_dir = root / "links"
+            links_dir.mkdir(parents=True, exist_ok=True)
+            (links_dir / "README.md").write_text("links\n", encoding="utf-8")
+            (links_dir / "planner.py").write_text("bridge\n", encoding="utf-8")
+            (root / "state/ygg/programs.json").write_text('{"programs":[{"id":"p1"}]}\n', encoding="utf-8")
+            (root / "state/ygg/ideas.json").write_text('{"ideas":[{"id":"i1"}]}\n', encoding="utf-8")
+
+            payload = build_repo_inventory(root)
+            self.assertEqual("ygg-repo-inventory/v1", payload["schema"])
+            self.assertIn("inventory", payload["commandSurface"])
+            system_ids = {row["id"] for row in payload["systems"]}
+            self.assertIn("cli-control-plane", system_ids)
+            self.assertIn("semantic-continuity-kernel", system_ids)
+            self.assertIn("runtime-embodiment-refresh", system_ids)
+            self.assertIn("event-routing-courier", system_ids)
+            bridge_paths = {row["relativePath"] for row in payload["bridges"]}
+            self.assertIn("links/planner.py", bridge_paths)
+            state_paths = {row["relativePath"] for row in payload["stateSurfaces"]}
+            self.assertIn("state/ygg/programs.json", state_paths)
+            self.assertIn("state/ygg/ideas.json", state_paths)
+            speculative_ids = {row["id"] for row in payload["speculativeTracks"]}
+            self.assertIn("response-cards-and-qa-layer", speculative_ids)
+            next_target_ids = {row["id"] for row in payload["nextTargets"]}
+            self.assertIn("semantic-registry-ops", next_target_ids)
+            self.assertIn("bridge-ownership-tightening", next_target_ids)
 
 
 if __name__ == "__main__":

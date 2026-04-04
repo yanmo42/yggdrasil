@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -7,6 +8,138 @@ from pathlib import Path
 from typing import Any
 
 from ygg.path_contract import RuntimePaths, resolve_runtime_paths
+
+REPO_COMMAND_SURFACE: tuple[str, ...] = (
+    "suggest",
+    "work",
+    "paths",
+    "bootstrap",
+    "inventory",
+    "raven",
+    "graft",
+    "beak",
+    "root",
+    "branch",
+    "resume",
+    "forge",
+    "promote",
+    "status",
+    "mode",
+    "run",
+    "nyx",
+    "checkpoint",
+    "heimdall",
+    "ratatoskr",
+)
+
+REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "cli-control-plane",
+        "title": "CLI control-plane",
+        "summary": "Canonical Ygg entrypoint, help/contracts surface, and operator-facing verb topology.",
+        "files": ["lib/ygg/cli.py", "bin/ygg", "commands/README.md", "README.md"],
+        "tests": ["tests/test_contracts.py"],
+        "commands": ["suggest", "work", "root", "branch", "resume", "forge", "status"],
+    },
+    {
+        "id": "semantic-continuity-kernel",
+        "title": "Semantic continuity kernel",
+        "summary": "Checkpoint/promote machinery plus structured programs/ideas registries under state/ygg/.",
+        "files": [
+            "lib/ygg/continuity.py",
+            "state/ygg/checkpoints",
+            "state/ygg/programs.json",
+            "state/ygg/ideas.json",
+        ],
+        "tests": ["tests/test_continuity.py"],
+        "commands": ["checkpoint", "promote", "status"],
+    },
+    {
+        "id": "runtime-embodiment-refresh",
+        "title": "Runtime embodiment refresh",
+        "summary": "Heimdall runtime snapshot, fingerprinting, kernel event emission, and daily note handoff.",
+        "files": ["lib/ygg/heimdall.py", "state/templates/ygg-self.example.json"],
+        "tests": ["tests/test_heimdall.py"],
+        "commands": ["heimdall"],
+    },
+    {
+        "id": "event-routing-courier",
+        "title": "Event routing courier",
+        "summary": "Ratatoskr event routing into daily notes and promotion-candidate sinks.",
+        "files": ["lib/ygg/ratatoskr.py", "state/runtime/promotions.jsonl", "state/notes/promotions.md"],
+        "tests": ["tests/test_ratatoskr.py"],
+        "commands": ["ratatoskr"],
+    },
+    {
+        "id": "bootstrap-and-path-contract",
+        "title": "Bootstrap and path contract",
+        "summary": "Portable path resolution, registry/profile loading, and Arch-first bootstrap inspection.",
+        "files": [
+            "lib/ygg/path_contract.py",
+            "lib/ygg/bootstrap_registry.py",
+            "state/templates/ygg-paths.yaml.template",
+            "state/profiles/components.yaml",
+        ],
+        "tests": [
+            "tests/test_bootstrap_inspect.py",
+            "tests/test_bootstrap_profiles.py",
+            "tests/test_bootstrap_registry.py",
+        ],
+        "commands": ["paths", "bootstrap"],
+    },
+    {
+        "id": "ravens-governed-roaming",
+        "title": "RAVENS governed roaming cognition",
+        "summary": "Inspectable flights, return packets, and graft/beak proposal artifacts.",
+        "files": ["lib/ygg/ravens_v1.py", "docs/RAVENS.md", "docs/RAVENS-V1.md"],
+        "tests": ["tests/test_ravens.py"],
+        "commands": ["raven", "graft", "beak"],
+    },
+    {
+        "id": "state-boundary-and-backups",
+        "title": "State boundary and backups",
+        "summary": "Commit-safe templates/policy plus local backup/restore scripts for runtime surfaces.",
+        "files": [
+            "state/README.md",
+            "state/policy/STATE-BOUNDARY.md",
+            "state/scripts/spine-backup.sh",
+            "state/scripts/spine-restore.sh",
+        ],
+        "tests": [],
+        "commands": ["bootstrap", "paths"],
+    },
+)
+
+REPO_SPECULATIVE_TRACKS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "response-cards-and-qa-layer",
+        "title": "Response cards / per-command Q&A layer",
+        "summary": "Roadmap-visible UX layer for suggested next commands and context-sensitive Q&A.",
+        "docEvidence": ["docs/ROADMAP.md"],
+        "missingFiles": [],
+    },
+    {
+        "id": "topology-visualization-2d",
+        "title": "2D branch topology visualization",
+        "summary": "Inspectable topology view over lanes/branches once semantics are stable.",
+        "docEvidence": ["docs/ROADMAP.md", "docs/NORTH-STAR.md"],
+        "missingFiles": ["lib/ygg/topology.py"],
+    },
+    {
+        "id": "voice-surface",
+        "title": "Voice-first / voice-to-voice operational surface",
+        "summary": "Conversational interface expansion over the same inspectable spine.",
+        "docEvidence": ["docs/ROADMAP.md", "docs/NORTH-STAR.md"],
+        "missingFiles": ["lib/ygg/voice.py"],
+    },
+    {
+        "id": "ar-vr-branch-visualization",
+        "title": "AR/VR branch visualization",
+        "summary": "Experimental visualization layer explicitly deferred until 2D semantics are stable.",
+        "docEvidence": ["docs/ROADMAP.md", "docs/NORTH-STAR.md"],
+        "missingFiles": ["lib/ygg/immersive.py"],
+    },
+)
 
 DEFAULT_MAX_REPO_DEPTH = 3
 DEFAULT_SCAN_EXCLUDES = {
@@ -294,4 +427,200 @@ def build_inventory(
         "topLevel": top_level_rows,
         "gitRepos": git_repo_rows,
         "classification": classification,
+    }
+
+
+def _load_json(path: Path) -> dict[str, Any] | None:
+    if not path.exists() or not path.is_file():
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _present_relatives(root: Path, relatives: list[str]) -> list[str]:
+    present: list[str] = []
+    for relative in relatives:
+        if (root / relative).exists():
+            present.append(relative)
+    return present
+
+
+def _system_status(*, files_present: list[str], tests_present: list[str], files_total: int, tests_total: int) -> str:
+    if files_total == 0:
+        return "missing"
+    if len(files_present) == files_total and (tests_total == 0 or len(tests_present) == tests_total):
+        return "implemented"
+    if files_present or tests_present:
+        return "partial"
+    return "missing"
+
+
+def _bridge_rows(root: Path) -> list[dict[str, Any]]:
+    links_dir = root / "links"
+    if not links_dir.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for path in sorted(links_dir.iterdir(), key=lambda item: item.name):
+        if path.name == "README.md":
+            continue
+        rows.append(_path_row(path, root, reason="Explicit bridge into assistant-home / spine-owned surface."))
+    return rows
+
+
+def _state_surface_rows(root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    candidates = (
+        ("state/ygg/programs.json", "Program registry seed for semantic continuity."),
+        ("state/ygg/ideas.json", "Idea registry seed for incubation and promotion."),
+        ("state/ygg/checkpoints", "Checkpoint ledger for semantic continuity decisions."),
+        ("state/runtime/persona-mode.json", "Persisted persona override runtime state."),
+        ("state/runtime/promotions.jsonl", "Promotion/event log for branch outcomes."),
+        ("state/runtime/ygg-self.json", "Live runtime embodiment snapshot emitted by Heimdall."),
+        ("state/runtime/ygg-kernel.json", "Kernel boot/runtime state surface."),
+        ("state/runtime/event-queue.jsonl", "Append-only canonical event queue."),
+        ("state/runtime/promotion-candidates.jsonl", "Promotion candidates queued for review."),
+    )
+    for relative, reason in candidates:
+        path = root / relative
+        if path.exists():
+            rows.append(_path_row(path, root, reason=reason))
+    return rows
+
+
+def _repo_system_rows(root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for spec in REPO_SYSTEM_SPECS:
+        files = list(spec.get("files") or [])
+        tests = list(spec.get("tests") or [])
+        files_present = _present_relatives(root, files)
+        tests_present = _present_relatives(root, tests)
+        status = _system_status(
+            files_present=files_present,
+            tests_present=tests_present,
+            files_total=len(files),
+            tests_total=len(tests),
+        )
+        if status == "missing":
+            continue
+        rows.append(
+            {
+                "id": spec["id"],
+                "title": spec["title"],
+                "status": status,
+                "summary": spec["summary"],
+                "commands": list(spec.get("commands") or []),
+                "evidence": {
+                    "filesPresent": files_present,
+                    "filesExpected": files,
+                    "testsPresent": tests_present,
+                    "testsExpected": tests,
+                },
+            }
+        )
+    status_order = {"implemented": 0, "partial": 1, "missing": 2}
+    rows.sort(key=lambda row: (status_order.get(str(row.get("status")), 9), str(row.get("title", ""))))
+    return rows
+
+
+def _speculative_rows(root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for spec in REPO_SPECULATIVE_TRACKS:
+        docs_present = _present_relatives(root, list(spec.get("docEvidence") or []))
+        if not docs_present:
+            continue
+        missing_files = [relative for relative in spec.get("missingFiles") or [] if not (root / relative).exists()]
+        if spec.get("missingFiles") and not missing_files:
+            continue
+        rows.append(
+            {
+                "id": spec["id"],
+                "title": spec["title"],
+                "status": "speculative",
+                "summary": spec["summary"],
+                "evidence": {
+                    "docsPresent": docs_present,
+                    "missingFiles": missing_files,
+                },
+            }
+        )
+    return rows
+
+
+def _next_target_rows(root: Path, systems: list[dict[str, Any]], bridges: list[dict[str, Any]], state_surfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    state_paths = {row["relativePath"] for row in state_surfaces}
+    system_ids = {row["id"] for row in systems}
+
+    if {"state/ygg/programs.json", "state/ygg/ideas.json"}.issubset(state_paths):
+        rows.append(
+            {
+                "id": "semantic-registry-ops",
+                "title": "Make programs/ideas first-class operational surfaces",
+                "why": "The repo already has seeded semantic registries, but they are not yet exposed as dedicated query/edit commands.",
+                "priority": "high",
+            }
+        )
+
+    if bridges:
+        rows.append(
+            {
+                "id": "bridge-ownership-tightening",
+                "title": "Tighten Ygg vs spine ownership boundaries",
+                "why": "Visible links back into assistant-home prove the bridge is real; next leverage is reducing ambiguity, not adding more surface area.",
+                "priority": "high",
+            }
+        )
+
+    if "runtime-embodiment-refresh" in system_ids and "event-routing-courier" in system_ids:
+        rows.append(
+            {
+                "id": "topology-over-events",
+                "title": "Build topology/inventory views over existing runtime and promotion events",
+                "why": "Heimdall and Ratatoskr already emit structured state; the next gain is a queryable map rather than more note files.",
+                "priority": "medium",
+            }
+        )
+
+    return rows[:3]
+
+
+def build_repo_inventory(root: str | Path) -> dict[str, Any]:
+    root_path = Path(root).expanduser().resolve()
+    systems = _repo_system_rows(root_path)
+    bridges = _bridge_rows(root_path)
+    state_surfaces = _state_surface_rows(root_path)
+    speculative = _speculative_rows(root_path)
+    ideas_payload = _load_json(root_path / "state" / "ygg" / "ideas.json") or {}
+    programs_payload = _load_json(root_path / "state" / "ygg" / "programs.json") or {}
+
+    summary = {
+        "implementedCount": sum(1 for row in systems if row.get("status") == "implemented"),
+        "partialCount": sum(1 for row in systems if row.get("status") == "partial"),
+        "speculativeCount": len(speculative),
+        "bridgeCount": len(bridges),
+        "ideaCount": len(ideas_payload.get("ideas") or []),
+        "programCount": len(programs_payload.get("programs") or []),
+        "commandCount": len(REPO_COMMAND_SURFACE),
+        "testCount": len(list((root_path / "tests").glob("test_*.py"))) if (root_path / "tests").exists() else 0,
+    }
+
+    return {
+        "schema": "ygg-repo-inventory/v1",
+        "generatedAt": datetime.now(UTC).isoformat(),
+        "root": str(root_path),
+        "summary": summary,
+        "commandSurface": list(REPO_COMMAND_SURFACE),
+        "systems": systems,
+        "bridges": bridges,
+        "stateSurfaces": state_surfaces,
+        "speculativeTracks": speculative,
+        "nextTargets": _next_target_rows(root_path, systems, bridges, state_surfaces),
     }

@@ -120,6 +120,14 @@ ygg paths check
 ygg paths check --json
 ```
 
+### Inventory the repo itself
+
+```bash
+ygg inventory
+ygg inventory --json
+ygg inventory --root ~/ygg
+```
+
 ### Run RAVENS v1 flights
 
 ```bash
@@ -198,6 +206,7 @@ Several verbs support non-mutating inspection modes:
 ygg suggest "implement the improved theme selector UX"
 ygg suggest --json "implement the improved theme selector UX"
 ygg help suggest --json
+ygg inventory --json
 ygg raven launch --trigger heartbeat "scan env" --json
 ygg raven status --json
 ygg graft propose "Add proposal gate" --json

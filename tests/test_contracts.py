@@ -6,7 +6,7 @@ from pathlib import Path
 
 YGG_CLI = Path.home() / "ygg" / "lib" / "ygg" / "cli.py"
 
-VERBS = ["suggest", "work", "paths", "bootstrap", "raven", "graft", "beak", "root", "branch", "resume", "forge", "promote", "status", "mode", "run", "nyx", "checkpoint", "heimdall", "ratatoskr"]
+VERBS = ["suggest", "work", "paths", "bootstrap", "inventory", "raven", "graft", "beak", "root", "branch", "resume", "forge", "promote", "status", "mode", "run", "nyx", "checkpoint", "heimdall", "ratatoskr"]
 REQUIRED_CONTRACT_KEYS = {
     "mutates_state",
     "requires",
