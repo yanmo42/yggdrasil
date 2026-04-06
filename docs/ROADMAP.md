@@ -58,10 +58,12 @@ Goal: reduce command-structure burden on the human without losing inspectability
 - [x] add `ygg help <verb>` affordances
 - [ ] add a per-command plain-English Q&A section for specialized contexts ("how would this command work for X?")
 - [ ] make `ygg work` the default human front door with deterministic continuity resolution under a soft NLP resolver
+- [ ] implement the real `ygg work` continuity-resolution core instead of mostly delegating to the assistant-home wrapper
 - [ ] teach `ygg work` to consume baton state + `state/active-work.json` + `state/concept-spine.json`
 - [ ] add explicit degraded-resolution reporting to the `ygg work` startup brief
 - [ ] add optional mode qualifiers to `ygg work` without making qualifiers mandatory
 - [ ] test ambiguity cases so `ygg work` falls back to planner honestly instead of bluffing
+- [ ] reduce user-facing command burden so explicit verbs increasingly serve precision, scripting, debugging, and machine-callable routing roles
 - [ ] explore lightweight TUI/GUI as an optional interface, not a requirement
 - [ ] prototype branch topology visualization in 2D as an inspectable interface layer
 - [ ] explore AR/VR branch visualization once 2D semantics are stable
