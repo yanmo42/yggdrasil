@@ -70,6 +70,14 @@ For the explicit ownership boundary, read:
 
 ## Core commands
 
+## Operator stance
+
+The intended shape is:
+- humans should usually be able to start with `ygg work`
+- explicit verbs should remain available for precision, scripting, debugging, and machine-to-machine routing
+- natural language should reduce command burden at the surface
+- deterministic structured routing should remain visible underneath
+
 ### Explain what verbs do (self-teaching)
 
 ```bash
@@ -159,7 +167,10 @@ ygg beak propose "Deprecate duplicate docs" --target docs/ --problem-type duplic
 
 ### Enter planner/work front door
 
+This should increasingly be the default human entrypoint.
+
 ```bash
+ygg work
 ygg work "add more functionality to theme selector in personal website"
 ```
 
@@ -185,9 +196,16 @@ ygg resume website-dev theme-selector-enhancements
 
 ### Bias toward implementation/delegation
 
+Use this when you want an explicit execution-oriented control.
+If you're not sure, prefer `ygg work` and let the front door resolve posture.
+
 ```bash
 ygg forge --domain website-dev --task theme-selector-enhancements \
   "implement the improved theme selector UX"
+
+# print a ready-to-run Codex command with wake behavior baked in
+ygg forge --domain ygg-dev --task sandy-chaos-alignment-constraints-v1 \
+  --print-worker-command --wake-now
 ```
 
 ### Record a branch disposition
@@ -215,6 +233,7 @@ ygg root --print-packet "help me plan"
 ygg resume website-dev theme-selector-enhancements --print-only
 ygg branch demo-domain demo-task --dry-run
 ygg forge --domain website-dev --task theme-selector-enhancements --print-packet
+ygg forge --domain ygg-dev --task sandy-chaos-alignment-constraints-v1 --print-worker-command --wake-now
 ygg promote website-dev theme-selector-enhancements --disposition log-daily --dry-run
 ```
 
@@ -258,4 +277,4 @@ Read these in order if you want the full model:
 
 - some underlying implementation still lives in `~/.openclaw/workspace-claw-main`
 - `ygg promote --disposition promote-durable` records a durable-promotion event but does not yet auto-rewrite canonical long-term memory/policy files
-- `ygg forge` biases planner routing toward implementation; it does not directly spawn codex by itself yet
+- `ygg forge` still does not directly spawn codex by itself yet, but it can now print the exact worker command to run next via `--print-worker-command` (optionally with `--wake-now`)

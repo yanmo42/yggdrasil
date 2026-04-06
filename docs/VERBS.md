@@ -18,22 +18,53 @@ For the strict per-verb input/output/mutation guarantees, see `docs/CONTRACTS.md
 ## `ygg work`
 
 ### Purpose
-Natural-language front door into the planner spine.
+The **default human entrypoint** into Ygg.
 
-### v1 behavior
+`ygg work` is where the human should be able to start most of the time.
+The rest of the command family should increasingly behave like:
+- explicit low-level controls
+- inspectable escape hatches
+- machine-callable routing targets
+- debugging and contract surfaces
+
+### Current behavior (v1 live)
 - forwards to the current planner-aware `work` wrapper in assistant-home
 - includes active task digest + local route suggestion
 - launches the planner session unless the underlying wrapper is changed
 
+### Draft next behavior (target)
+- `ygg work` with no qualifiers should resolve the active continuity target and generate a startup brief
+- should consume, in priority order:
+  - active task baton / resume state
+  - `state/active-work.json`
+  - `state/concept-spine.json`
+- should treat natural language as a **soft resolver layer** over a deterministic core
+- should accept optional explicit qualifiers for target and mode without requiring them
+- should surface degraded continuity honestly when resolution is partial or ambiguous
+- should remain easy for humans while resolving into explicit structured packets internally
+
 ### Use when
-- the human wants the flexible default entrypoint
+- the human wants the default front door
 - route is not yet fully known
 - planner supervision is desired
+- continuity should be assembled before deeper execution choices
+- the user wants NLP convenience without surrendering inspectability
 
-### Example
+### Examples
 ```bash
+ygg work
 ygg work "fix theme selector on my site"
+ygg work ygg-dev
+ygg work "continue the Sandy Chaos constraints lane"
 ```
+
+### Strategic note
+The long-term shape should be:
+- **human enters through `ygg work` most of the time**
+- other verbs remain available because explicit control, scripting, predictability, and machine-to-machine routing still matter
+
+### Note
+See `docs/notes/WORK-FRONT-DOOR-V2.md` for the draft front-door contract and resolution order.
 
 ---
 
@@ -197,19 +228,36 @@ Open the planner in an implementation/delegation posture for a specific lane.
 - optional request text is included as implementation context
 - launches planner by default
 - supports `--print-packet`
+- supports `--print-worker-command` to emit a ready-to-run Codex command instead of launching planner
+- supports `--wake-now` to bake an immediate `openclaw system event --mode now` hook into the printed worker command
 
 ### Important limitation in v1
-`forge` does **not** directly spawn a coding agent by itself yet.
-It prepares the planner with a strong implementation/delegation route suggestion.
+`forge` still does **not** directly spawn a coding agent by itself yet.
+What it can do now is either:
+- prepare the planner with a strong implementation/delegation route suggestion, or
+- print the exact worker command you can run next.
+
+### Design role
+`forge` should be thought of less as a primary human front door and more as:
+- an explicit execution-bias control
+- a machine-callable internal route target
+- a debugging/inspection surface when you want to see the exact implementation handoff posture
+
+If the user is not sure what to run, the better answer should usually be `ygg work`, not `ygg forge`.
 
 ### Use when
 - the next move is implementation
 - you want planner oversight but with coding/delegation bias
+- you need a precise, explicit execution-oriented control rather than the general front door
 
 ### Example
 ```bash
 ygg forge --domain website-dev --task theme-selector-enhancements \
   "implement the improved theme selector UX"
+
+# print the exact codex command with wake behavior baked in
+ygg forge --domain ygg-dev --task sandy-chaos-alignment-constraints-v1 \
+  --print-worker-command --wake-now
 ```
 
 ---

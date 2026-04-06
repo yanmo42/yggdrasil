@@ -50,18 +50,24 @@ Goal: move selected implementation into `~/ygg/lib/ygg/` without losing clarity.
 
 ## Phase 5 — Interface and co-reasoning layer
 
-Goal: reduce command-structure burden on the human without losing inspectability.
+Goal: reduce command-structure burden on the human without losing inspectability, while keeping one strong NLP front door and a deterministic programmable routing core.
 
 - [x] add natural-language guidance layer that can translate fuzzy intent into suggested Ygg commands (`ygg suggest`)
 - [ ] add response cards / suggested next commands after major actions
 - [x] add `ygg explain <verb>` affordances
 - [x] add `ygg help <verb>` affordances
 - [ ] add a per-command plain-English Q&A section for specialized contexts ("how would this command work for X?")
+- [ ] make `ygg work` the default human front door with deterministic continuity resolution under a soft NLP resolver
+- [ ] teach `ygg work` to consume baton state + `state/active-work.json` + `state/concept-spine.json`
+- [ ] add explicit degraded-resolution reporting to the `ygg work` startup brief
+- [ ] add optional mode qualifiers to `ygg work` without making qualifiers mandatory
+- [ ] test ambiguity cases so `ygg work` falls back to planner honestly instead of bluffing
 - [ ] explore lightweight TUI/GUI as an optional interface, not a requirement
 - [ ] prototype branch topology visualization in 2D as an inspectable interface layer
 - [ ] explore AR/VR branch visualization once 2D semantics are stable
 - [ ] preserve deterministic underlying commands even when the surface becomes more conversational
 - [ ] design the interface as a human/machine hybrid workflow rather than a one-sided automation shell
+- [ ] make lower-level verbs increasingly serve as explicit machine-callable route targets and operator/debug controls rather than competing human entrypoints
 
 ## Guardrails
 

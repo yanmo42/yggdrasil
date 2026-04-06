@@ -108,12 +108,18 @@ EXPLAIN_CARDS = {
         "next": ["work", "resume", "forge", "branch"],
     },
     "work": {
-        "purpose": "Open the planner-aware front door for flexible natural-language routing.",
+        "purpose": "Open the default Ygg front door for continuity-aware planning, with optional soft natural-language resolution.",
         "when_to_use": [
             "When route/target is still unclear.",
             "When you want planner oversight by default.",
+            "When you want Ygg to assemble continuity before execution choices.",
+            "When you want the main human entrypoint rather than a lower-level control verb.",
         ],
-        "examples": ['ygg work "add more functionality to theme selector in personal website"'],
+        "examples": [
+            'ygg work',
+            'ygg work "add more functionality to theme selector in personal website"',
+            'ygg work "continue the Sandy Chaos constraints lane"',
+        ],
         "next": ["suggest", "root", "status"],
     },
     "paths": {
@@ -184,14 +190,17 @@ EXPLAIN_CARDS = {
         "next": ["forge", "promote", "status"],
     },
     "forge": {
-        "purpose": "Bias planner routing toward implementation/delegation for a specific lane.",
+        "purpose": "Bias planner routing toward implementation/delegation for a specific lane, or print a ready worker command.",
         "when_to_use": [
             "When the next move is coding/build/fix execution.",
             "When you want implementation posture while preserving planner oversight.",
+            "When you want Ygg to emit a ready-to-run Codex command with wake behavior baked in.",
+            "When you need an explicit lower-level execution control instead of the general front door.",
         ],
         "examples": [
             'ygg forge --domain website-dev --task theme-selector-enhancements "implement the improved theme selector UX"',
             "ygg forge --domain website-dev --task theme-selector-enhancements --print-packet",
+            "ygg forge --domain ygg-dev --task sandy-chaos-alignment-constraints-v1 --print-worker-command --wake-now",
         ],
         "next": ["promote", "status", "resume"],
     },
@@ -349,10 +358,17 @@ VERB_CONTRACTS = {
     "work": {
         "mutates_state": "indirect",
         "requires": [],
-        "optional": ["request..."],
+        "optional": [
+            "request...",
+            "future target qualifiers",
+            "future mode qualifiers",
+        ],
         "writes": ["delegated to workspace work wrapper / planner session"],
         "calls": ["scripts/work.py"],
-        "guarantees": ["forwards arguments verbatim to the workspace work wrapper"],
+        "guarantees": [
+            "currently forwards arguments verbatim to the workspace work wrapper",
+            "target shape is a default human front door with deterministic continuity resolution under a soft NLP layer",
+        ],
         "fails_when": ["workspace work script is missing or exits non-zero"],
     },
     "paths": {
@@ -454,12 +470,15 @@ VERB_CONTRACTS = {
     "forge": {
         "mutates_state": "indirect",
         "requires": [],
-        "optional": ["request...", "--domain", "--task", "--session", "--openclaw-bin", "--print-packet"],
-        "writes": ["planner message stream (unless --print-packet)"],
-        "calls": ["tools.work_v1.planner.build_planner_boot_packet", "openclaw tui --session ... --message ..."],
+        "optional": ["request...", "--domain", "--task", "--session", "--openclaw-bin", "--print-packet", "--print-worker-command", "--wake-now", "--cwd"],
+        "writes": ["planner message stream (unless --print-packet/--print-worker-command)"],
+        "calls": ["tools.work_v1.planner.build_planner_boot_packet", "openclaw tui --session ... --message ...", "codex exec --full-auto ... (printed only when requested)"],
         "guarantees": [
             "route action is forced to suggest_spawn_codex",
             "target resolution requires an unambiguous active lane",
+            "can print a ready worker command instead of launching planner when --print-worker-command is used",
+            "can include an OpenClaw wake hook in the printed worker command when --wake-now is used",
+            "remains an explicit lower-level execution control even if work becomes the default human entrypoint",
         ],
         "fails_when": [
             "no active task is available and no target is provided",
@@ -739,6 +758,55 @@ def _run(cmd: list[str]) -> int:
 
 def _render_cmd(cmd: list[str]) -> str:
     return shlex.join(cmd)
+
+
+def _build_forge_worker_command(
+    *,
+    domain: str,
+    task: str,
+    request: str,
+    cwd: str | None,
+    openclaw_bin: str,
+    wake_now: bool,
+) -> str:
+    lane = f"{domain}/{task}"
+    prompt_lines = [
+        f"Continue the {lane} lane.",
+        "",
+        "Task:",
+        request,
+        "",
+        "Constraints:",
+        "- keep scope tight",
+        "- run relevant tests",
+        "- do not commit unless asked",
+    ]
+    if wake_now:
+        notify_cmd = _render_cmd(
+            [
+                openclaw_bin,
+                "system",
+                "event",
+                "--text",
+                f"Done: {lane}; summarize changes, validation status, and next step",
+                "--mode",
+                "now",
+            ]
+        )
+        prompt_lines.extend(
+            [
+                "",
+                "When completely finished, run this command to notify me:",
+                notify_cmd,
+            ]
+        )
+
+    cmd = ["codex"]
+    worker_cwd = _compact(cwd) or os.getcwd()
+    if worker_cwd:
+        cmd.extend(["-C", worker_cwd])
+    cmd.extend(["exec", "--full-auto", "\n".join(prompt_lines)])
+    return _render_cmd(cmd)
 
 
 def _active_tasks():
@@ -2264,6 +2332,18 @@ def cmd_resume(args: argparse.Namespace) -> int:
 def cmd_forge(args: argparse.Namespace) -> int:
     domain, task = _resolve_target(args.domain, args.task, require_task=True, verb="forge")
     request = _compact(" ".join(args.request)) or f"Implement work for {domain} / {task}."
+    if args.print_worker_command:
+        print(
+            _build_forge_worker_command(
+                domain=domain,
+                task=task,
+                request=request,
+                cwd=args.cwd,
+                openclaw_bin=args.openclaw_bin,
+                wake_now=bool(args.wake_now),
+            )
+        )
+        return 0
     packet = _forced_packet(
         request=request,
         action="suggest_spawn_codex",
@@ -2614,6 +2694,9 @@ def build_parser() -> argparse.ArgumentParser:
     forge_p.add_argument("--session", default=DEFAULT_SESSION, help=f"Planner session suffix (default: {DEFAULT_SESSION})")
     forge_p.add_argument("--openclaw-bin", default=DEFAULT_OPENCLAW_BIN, help="OpenClaw binary path")
     forge_p.add_argument("--print-packet", action="store_true", help="Print the planner packet instead of launching")
+    forge_p.add_argument("--print-worker-command", action="store_true", help="Print a ready-to-run Codex worker command instead of launching planner")
+    forge_p.add_argument("--wake-now", action="store_true", help="Include an immediate OpenClaw wake hook in the printed worker command")
+    forge_p.add_argument("--cwd", help="Working directory to embed in the printed worker command (defaults to current directory)")
     forge_p.set_defaults(func=cmd_forge)
 
     checkpoint_p = sub.add_parser("checkpoint", help="Write an SC continuity checkpoint into Ygg state")

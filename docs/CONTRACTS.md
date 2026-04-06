@@ -36,6 +36,7 @@ This file makes verb behavior explicit so human/machine usage stays aligned.
 
 ## `ygg work`
 
+### Current live contract (v1)
 - mutates state: `indirect`
 - requires: none
 - optional: `request...`
@@ -44,6 +45,31 @@ This file makes verb behavior explicit so human/machine usage stays aligned.
   - forwards arguments verbatim to workspace `scripts/work.py`
 - fails when:
   - workspace `work.py` is missing or exits non-zero
+
+### Draft target contract (next)
+- mutates state: `indirect`
+- requires: none
+- optional:
+  - `request...`
+  - explicit target qualifiers (`domain`, `task`, or equivalent)
+  - optional mode qualifiers (`--mode planner|implementation|review` or equivalent)
+- reads:
+  - baton / resume state
+  - `state/active-work.json`
+  - `state/concept-spine.json` (advisory, when present)
+- guarantees:
+  - works as the default no-qualifier human front door
+  - preserves a deterministic continuity-resolution core underneath any NLP layer
+  - uses natural language only as a soft resolver layer
+  - surfaces degraded continuity explicitly when resolution is partial/ambiguous
+  - does not treat concept-spine as authoritative for policy/runtime mutation
+  - resolves into explicit structured routing/launch data that lower-level verbs or machine callers can reuse
+- fails when:
+  - no usable continuity target can be resolved and planner fallback cannot be launched
+  - required state surfaces are malformed in a way that prevents packet construction
+
+### Draft behavior note
+The target behavior is described in `docs/notes/WORK-FRONT-DOOR-V2.md`; this does not imply the current wrapper already satisfies that contract.
 
 ## `ygg root`
 
@@ -92,11 +118,14 @@ This file makes verb behavior explicit so human/machine usage stays aligned.
 
 - mutates state: `indirect`
 - requires: none
-- optional: `request...`, `--domain`, `--task`, `--session`, `--openclaw-bin`, `--print-packet`
-- writes: planner message stream (unless `--print-packet`)
+- optional: `request...`, `--domain`, `--task`, `--session`, `--openclaw-bin`, `--print-packet`, `--print-worker-command`, `--wake-now`, `--cwd`
+- writes: planner message stream (unless `--print-packet` or `--print-worker-command`)
 - guarantees:
   - forced route action = `suggest_spawn_codex`
   - requires unambiguous lane target
+  - can print a ready-to-run Codex worker command instead of launching planner
+  - can include an immediate OpenClaw wake hook in the printed worker command
+  - remains an explicit low-level execution control even if `ygg work` becomes the main human front door
 - fails when:
   - no active task exists and no explicit target is provided
   - target resolution is ambiguous
