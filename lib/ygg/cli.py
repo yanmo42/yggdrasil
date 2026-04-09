@@ -57,7 +57,14 @@ from ygg.ravens_v1 import (
     record_probe,
 )
 from ygg.ratatoskr import main as ratatoskr_main
-from ygg.semantic_registry import get_registry_item, list_registry_items
+from ygg.semantic_registry import (
+    SemanticRegistryValidationError,
+    create_registry_item,
+    get_registry_item,
+    link_idea_registry_item,
+    list_registry_items,
+    update_registry_item,
+)
 
 HOME = Path.home()
 RUNTIME_PATHS: RuntimePaths = resolve_runtime_paths()
@@ -185,28 +192,34 @@ EXPLAIN_CARDS = {
         "next": ["program", "idea", "status"],
     },
     "program": {
-        "purpose": "Inspect the semantic program registry under Ygg-owned state.",
+        "purpose": "Inspect and explicitly mutate the semantic program registry under Ygg-owned state.",
         "when_to_use": [
             "When you want the current durable work inventory without reading raw JSON by hand.",
             "When machine or human callers need an inspectable program list or one exact record.",
+            "When you need to add or patch a durable program record explicitly from the CLI.",
         ],
         "examples": [
             "ygg program list",
             "ygg program list --json",
             "ygg program show ygg-continuity-integration",
+            "ygg program add --id semantic-registry-ops --title \"Semantic registry operations\" --status active",
+            "ygg program update semantic-registry-ops --next-action \"Add CLI link flows\"",
         ],
         "next": ["idea", "inventory", "status"],
     },
     "idea": {
-        "purpose": "Inspect the semantic idea registry under Ygg-owned state.",
+        "purpose": "Inspect and explicitly mutate the semantic idea registry under Ygg-owned state.",
         "when_to_use": [
             "When you want the incubating concept inventory without opening the raw file directly.",
             "When machine or human callers need an inspectable idea list or one exact record.",
+            "When you need to add, patch, or link a durable idea record explicitly from the CLI.",
         ],
         "examples": [
             "ygg idea list",
             "ygg idea list --json",
             "ygg idea show topology-aware-continuity-retrieval",
+            "ygg idea add --id registry-link-flow --title \"Registry link flow\" --status incubating",
+            "ygg idea link registry-link-flow --program semantic-registry-ops --promotion-target docs/SEMANTIC-REGISTRY-OPS.md",
         ],
         "next": ["program", "inventory", "status"],
     },
@@ -510,35 +523,83 @@ VERB_CONTRACTS = {
         ],
     },
     "program": {
-        "mutates_state": False,
+        "mutates_state": True,
         "requires": ["subcommand"],
-        "optional": ["list|show", "<id> (for show)", "--root", "--json"],
-        "writes": [],
-        "calls": ["semantic_registry.list_registry_items", "semantic_registry.get_registry_item"],
+        "optional": [
+            "list|show|add|update",
+            "<id> (for show/update)",
+            "--root",
+            "--json",
+            "--id",
+            "--title",
+            "--status",
+            "--kind",
+            "--summary",
+            "--owner",
+            "--priority",
+            "--related-lane",
+            "--artifact",
+            "--next-action",
+            "--updated-from",
+            "--note",
+        ],
+        "writes": ["state/ygg/programs.json when add/update runs"],
+        "calls": [
+            "semantic_registry.list_registry_items",
+            "semantic_registry.get_registry_item",
+            "semantic_registry.create_registry_item",
+            "semantic_registry.update_registry_item",
+        ],
         "guarantees": [
             "reads the canonical program registry from state/ygg/programs.json",
             "supports human-readable text and machine-readable JSON",
-            "never mutates registry state",
+            "add/update mutate one explicit program record at a time with patch semantics",
         ],
         "fails_when": [
             "registry file is missing or malformed",
             "requested program id does not exist",
+            "input fails semantic registry validation",
         ],
     },
     "idea": {
-        "mutates_state": False,
+        "mutates_state": True,
         "requires": ["subcommand"],
-        "optional": ["list|show", "<id> (for show)", "--root", "--json"],
-        "writes": [],
-        "calls": ["semantic_registry.list_registry_items", "semantic_registry.get_registry_item"],
+        "optional": [
+            "list|show|add|update|link",
+            "<id> (for show/update/link)",
+            "--root",
+            "--json",
+            "--id",
+            "--title",
+            "--status",
+            "--summary",
+            "--claim-tier",
+            "--origin",
+            "--next-action",
+            "--tag",
+            "--note",
+            "--program",
+            "--checkpoint",
+            "--promotion-target",
+        ],
+        "writes": ["state/ygg/ideas.json when add/update/link runs"],
+        "calls": [
+            "semantic_registry.list_registry_items",
+            "semantic_registry.get_registry_item",
+            "semantic_registry.create_registry_item",
+            "semantic_registry.update_registry_item",
+            "semantic_registry.link_idea_registry_item",
+        ],
         "guarantees": [
             "reads the canonical idea registry from state/ygg/ideas.json",
             "supports human-readable text and machine-readable JSON",
-            "never mutates registry state",
+            "add/update mutate one explicit idea record at a time with patch semantics",
+            "link appends deduped semantic links in the existing links schema shape",
         ],
         "fails_when": [
             "registry file is missing or malformed",
             "requested idea id does not exist",
+            "input fails semantic registry validation",
         ],
     },
     "retrieve": {
@@ -2886,8 +2947,76 @@ def _resolve_registry_root(root_arg: str) -> Path:
 def _load_registry_payload_or_die(root: Path, kind: str) -> dict[str, object]:
     try:
         return _registry_list_payload(root, kind)
-    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
         raise SystemExit(str(exc)) from exc
+
+
+def _registry_mutation_payload(operation: str, result: dict[str, object]) -> dict[str, object]:
+    item = result["item"]
+    return {
+        "status": "ok",
+        "operation": operation,
+        "kind": result["kind"],
+        "path": str(result["path"]),
+        "updatedAt": result["updatedAt"],
+        "item": item,
+    }
+
+
+def _print_registry_mutation_text(payload: dict[str, object]) -> None:
+    item = payload["item"]
+    print(f"Ygg {payload['kind']} {payload['operation']}\n")
+    print(f"id: {item.get('id')}")
+    print(f"title: {item.get('title') or '(untitled)'}")
+    print(f"status: {item.get('status') or '(unknown)'}")
+    print(f"path: {payload['path']}")
+    print(f"updatedAt: {payload.get('updatedAt') or '(unknown)'}")
+
+
+def _append_patch_value(patch: dict[str, object], key: str, value: object) -> None:
+    if value is None:
+        return
+    if isinstance(value, str) and not value.strip():
+        return
+    patch[key] = value
+
+
+def _build_program_item(args: argparse.Namespace, *, include_required: bool) -> dict[str, object]:
+    item: dict[str, object] = {}
+    if include_required:
+        _append_patch_value(item, "id", args.id)
+    _append_patch_value(item, "title", args.title)
+    _append_patch_value(item, "status", args.status)
+    _append_patch_value(item, "kind", args.kind)
+    _append_patch_value(item, "summary", args.summary)
+    _append_patch_value(item, "owner", args.owner)
+    _append_patch_value(item, "priority", args.priority)
+    _append_patch_value(item, "nextAction", args.next_action)
+    _append_patch_value(item, "updatedFrom", args.updated_from)
+    if args.related_lanes is not None:
+        item["relatedLanes"] = args.related_lanes
+    if args.artifacts is not None:
+        item["artifacts"] = args.artifacts
+    if args.notes is not None:
+        item["notes"] = args.notes
+    return item
+
+
+def _build_idea_item(args: argparse.Namespace, *, include_required: bool) -> dict[str, object]:
+    item: dict[str, object] = {}
+    if include_required:
+        _append_patch_value(item, "id", args.id)
+    _append_patch_value(item, "title", args.title)
+    _append_patch_value(item, "status", args.status)
+    _append_patch_value(item, "summary", args.summary)
+    _append_patch_value(item, "claimTier", args.claim_tier)
+    _append_patch_value(item, "origin", args.origin)
+    _append_patch_value(item, "nextAction", args.next_action)
+    if args.tags is not None:
+        item["tags"] = args.tags
+    if args.notes is not None:
+        item["notes"] = args.notes
+    return item
 
 
 def cmd_program_list(args: argparse.Namespace) -> int:
@@ -2903,7 +3032,7 @@ def cmd_program_show(args: argparse.Namespace) -> int:
     root = _resolve_registry_root(args.root)
     try:
         payload = _registry_show_payload(root, "program", args.program_id)
-    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
         raise SystemExit(str(exc)) from exc
     except KeyError as exc:
         raise SystemExit(exc.args[0]) from exc
@@ -2911,6 +3040,39 @@ def cmd_program_show(args: argparse.Namespace) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
     _print_registry_show_text(payload)
+    return 0
+
+
+def cmd_program_add(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    try:
+        result = create_registry_item(root, "program", _build_program_item(args, include_required=True))
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
+        raise SystemExit(str(exc)) from exc
+    payload = _registry_mutation_payload("add", result)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_mutation_text(payload)
+    return 0
+
+
+def cmd_program_update(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    patch = _build_program_item(args, include_required=False)
+    if not patch:
+        raise SystemExit("No program fields were provided to update.")
+    try:
+        result = update_registry_item(root, "program", args.program_id, patch)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
+        raise SystemExit(str(exc)) from exc
+    except KeyError as exc:
+        raise SystemExit(exc.args[0]) from exc
+    payload = _registry_mutation_payload("update", result)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_mutation_text(payload)
     return 0
 
 
@@ -2927,7 +3089,7 @@ def cmd_idea_show(args: argparse.Namespace) -> int:
     root = _resolve_registry_root(args.root)
     try:
         payload = _registry_show_payload(root, "idea", args.idea_id)
-    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
         raise SystemExit(str(exc)) from exc
     except KeyError as exc:
         raise SystemExit(exc.args[0]) from exc
@@ -2935,6 +3097,61 @@ def cmd_idea_show(args: argparse.Namespace) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
     _print_registry_show_text(payload)
+    return 0
+
+
+def cmd_idea_add(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    try:
+        result = create_registry_item(root, "idea", _build_idea_item(args, include_required=True))
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
+        raise SystemExit(str(exc)) from exc
+    payload = _registry_mutation_payload("add", result)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_mutation_text(payload)
+    return 0
+
+
+def cmd_idea_update(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    patch = _build_idea_item(args, include_required=False)
+    if not patch:
+        raise SystemExit("No idea fields were provided to update.")
+    try:
+        result = update_registry_item(root, "idea", args.idea_id, patch)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
+        raise SystemExit(str(exc)) from exc
+    except KeyError as exc:
+        raise SystemExit(exc.args[0]) from exc
+    payload = _registry_mutation_payload("update", result)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_mutation_text(payload)
+    return 0
+
+
+def cmd_idea_link(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    try:
+        result = link_idea_registry_item(
+            root,
+            args.idea_id,
+            programs=args.programs,
+            checkpoints=args.checkpoints,
+            promotion_targets=args.promotion_targets,
+        )
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, SemanticRegistryValidationError) as exc:
+        raise SystemExit(str(exc)) from exc
+    except KeyError as exc:
+        raise SystemExit(exc.args[0]) from exc
+    payload = _registry_mutation_payload("link", result)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_mutation_text(payload)
     return 0
 
 
@@ -3644,7 +3861,7 @@ def build_parser() -> argparse.ArgumentParser:
     frontier_open_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     frontier_open_p.set_defaults(func=cmd_frontier_open)
 
-    program_p = sub.add_parser("program", help="Inspect the semantic program registry")
+    program_p = sub.add_parser("program", help="Inspect and mutate the semantic program registry")
     program_sub = program_p.add_subparsers(dest="program_cmd", required=True)
     program_list_p = program_sub.add_parser("list", help="List known programs from state/ygg/programs.json")
     program_list_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/programs.json (default: current Ygg root)")
@@ -3655,8 +3872,40 @@ def build_parser() -> argparse.ArgumentParser:
     program_show_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/programs.json (default: current Ygg root)")
     program_show_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     program_show_p.set_defaults(func=cmd_program_show)
+    program_add_p = program_sub.add_parser("add", help="Add one program to state/ygg/programs.json")
+    program_add_p.add_argument("--id", required=True, help="Stable program id")
+    program_add_p.add_argument("--title", required=True, help="Program title")
+    program_add_p.add_argument("--status", required=True, help="Program status")
+    program_add_p.add_argument("--kind", help="Program kind")
+    program_add_p.add_argument("--summary", help="Program summary")
+    program_add_p.add_argument("--owner", help="Program owner")
+    program_add_p.add_argument("--priority", help="Program priority")
+    program_add_p.add_argument("--related-lane", dest="related_lanes", action="append", help="Append one related lane; repeat for multiple")
+    program_add_p.add_argument("--artifact", dest="artifacts", action="append", help="Append one artifact path; repeat for multiple")
+    program_add_p.add_argument("--next-action", dest="next_action", help="Next explicit action")
+    program_add_p.add_argument("--updated-from", dest="updated_from", help="Mutation/source provenance label")
+    program_add_p.add_argument("--note", dest="notes", action="append", help="Append one note; repeat for multiple")
+    program_add_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/programs.json (default: current Ygg root)")
+    program_add_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    program_add_p.set_defaults(func=cmd_program_add)
+    program_update_p = program_sub.add_parser("update", help="Patch one program in state/ygg/programs.json")
+    program_update_p.add_argument("program_id", help="Program id")
+    program_update_p.add_argument("--title", help="Program title")
+    program_update_p.add_argument("--status", help="Program status")
+    program_update_p.add_argument("--kind", help="Program kind")
+    program_update_p.add_argument("--summary", help="Program summary")
+    program_update_p.add_argument("--owner", help="Program owner")
+    program_update_p.add_argument("--priority", help="Program priority")
+    program_update_p.add_argument("--related-lane", dest="related_lanes", action="append", help="Replace relatedLanes using repeated values")
+    program_update_p.add_argument("--artifact", dest="artifacts", action="append", help="Replace artifacts using repeated values")
+    program_update_p.add_argument("--next-action", dest="next_action", help="Next explicit action")
+    program_update_p.add_argument("--updated-from", dest="updated_from", help="Mutation/source provenance label")
+    program_update_p.add_argument("--note", dest="notes", action="append", help="Replace notes using repeated values")
+    program_update_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/programs.json (default: current Ygg root)")
+    program_update_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    program_update_p.set_defaults(func=cmd_program_update)
 
-    idea_p = sub.add_parser("idea", help="Inspect the semantic idea registry")
+    idea_p = sub.add_parser("idea", help="Inspect and mutate the semantic idea registry")
     idea_sub = idea_p.add_subparsers(dest="idea_cmd", required=True)
     idea_list_p = idea_sub.add_parser("list", help="List known ideas from state/ygg/ideas.json")
     idea_list_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/ideas.json (default: current Ygg root)")
@@ -3667,6 +3916,40 @@ def build_parser() -> argparse.ArgumentParser:
     idea_show_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/ideas.json (default: current Ygg root)")
     idea_show_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     idea_show_p.set_defaults(func=cmd_idea_show)
+    idea_add_p = idea_sub.add_parser("add", help="Add one idea to state/ygg/ideas.json")
+    idea_add_p.add_argument("--id", required=True, help="Stable idea id")
+    idea_add_p.add_argument("--title", required=True, help="Idea title")
+    idea_add_p.add_argument("--status", required=True, help="Idea status")
+    idea_add_p.add_argument("--summary", help="Idea summary")
+    idea_add_p.add_argument("--claim-tier", dest="claim_tier", help="Claim tier")
+    idea_add_p.add_argument("--origin", help="Idea origin")
+    idea_add_p.add_argument("--next-action", dest="next_action", help="Next explicit action")
+    idea_add_p.add_argument("--tag", dest="tags", action="append", help="Append one tag; repeat for multiple")
+    idea_add_p.add_argument("--note", dest="notes", action="append", help="Append one note; repeat for multiple")
+    idea_add_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/ideas.json (default: current Ygg root)")
+    idea_add_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    idea_add_p.set_defaults(func=cmd_idea_add)
+    idea_update_p = idea_sub.add_parser("update", help="Patch one idea in state/ygg/ideas.json")
+    idea_update_p.add_argument("idea_id", help="Idea id")
+    idea_update_p.add_argument("--title", help="Idea title")
+    idea_update_p.add_argument("--status", help="Idea status")
+    idea_update_p.add_argument("--summary", help="Idea summary")
+    idea_update_p.add_argument("--claim-tier", dest="claim_tier", help="Claim tier")
+    idea_update_p.add_argument("--origin", help="Idea origin")
+    idea_update_p.add_argument("--next-action", dest="next_action", help="Next explicit action")
+    idea_update_p.add_argument("--tag", dest="tags", action="append", help="Replace tags using repeated values")
+    idea_update_p.add_argument("--note", dest="notes", action="append", help="Replace notes using repeated values")
+    idea_update_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/ideas.json (default: current Ygg root)")
+    idea_update_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    idea_update_p.set_defaults(func=cmd_idea_update)
+    idea_link_p = idea_sub.add_parser("link", help="Append deduped links to one idea in state/ygg/ideas.json")
+    idea_link_p.add_argument("idea_id", help="Idea id")
+    idea_link_p.add_argument("--program", dest="programs", action="append", help="Append one linked program id; repeat for multiple")
+    idea_link_p.add_argument("--checkpoint", dest="checkpoints", action="append", help="Append one linked checkpoint path; repeat for multiple")
+    idea_link_p.add_argument("--promotion-target", dest="promotion_targets", action="append", help="Append one promotion target; repeat for multiple")
+    idea_link_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/ideas.json (default: current Ygg root)")
+    idea_link_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    idea_link_p.set_defaults(func=cmd_idea_link)
 
     retrieve_p = sub.add_parser("retrieve", help="Query normalized continuity state")
     retrieve_p.add_argument("query", help="Freeform continuity query")
