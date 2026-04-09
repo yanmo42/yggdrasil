@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "query": "topology-aware continuity retrieval",
+      "expectedIds": ["idea:topology-aware-continuity-retrieval"],
+      "acceptableIds": ["checkpoint:2026-04-02T09-30-00+00-00_topological-memory"],
+      "why": "Core idea lookup",
+      "category": "cross-surface continuity retrieval"
+    },
+    {
+      "query": "continuity integration program",
+      "expectedIds": ["program:ygg-continuity-integration"],
+      "acceptableIds": ["idea:topology-aware-continuity-retrieval"],
+      "why": "Program lookup",
+      "category": "ownership/program linkage"
+    },
+    {
+      "query": "runtime embodiment changed",
+      "expectedIds": ["event:evt_runtime_changed"],
+      "acceptableIds": ["event:evt_runtime_refresh"],
+      "why": "Runtime event lookup",
+      "category": "runtime continuity lookup"
+    },
+    {
+      "query": "first natural language guidance layer",
+      "expectedIds": ["promotion:2026-03-14T01:23:06-04:00-ygg-dev-suggest-command-1"],
+      "acceptableIds": [],
+      "why": "Promotion lookup",
+      "category": "artifact/source lookup"
+    },
+    {
+      "query": "build topology scoring benchmark baselines",
+      "expectedIds": ["checkpoint:2026-04-02T09-30-00+00-00_topological-memory"],
+      "acceptableIds": ["idea:topology-aware-continuity-retrieval"],
+      "why": "Checkpoint next-action lookup",
+      "category": "next-action retrieval"
+    }
+  ]
+}

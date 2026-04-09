@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-02T14:38:00-04:00",
+  "programs": [
+    {
+      "id": "ygg-continuity-integration",
+      "title": "Ygg continuity integration",
+      "status": "active",
+      "kind": "productization",
+      "summary": "Integrate semantic continuity, runtime signals, and inspectable retrieval into Ygg.",
+      "owner": "ian+ygg",
+      "priority": "high",
+      "relatedLanes": ["continuity", "topological-memory"],
+      "artifacts": ["docs/CONTINUITY-SCHEMA-AND-OWNERSHIP-2026-04-02.md"],
+      "nextAction": "Expose continuity retrieval and benchmarking in the CLI.",
+      "notes": []
+    },
+    {
+      "id": "runtime-observability",
+      "title": "Runtime observability",
+      "status": "active",
+      "kind": "ops",
+      "summary": "Capture embodiment changes and route them into durable continuity logs.",
+      "owner": "ian+ygg",
+      "priority": "medium",
+      "relatedLanes": ["runtime"],
+      "artifacts": ["docs/RATATOSKR.md"],
+      "nextAction": "Keep runtime refresh and change events queryable.",
+      "notes": []
+    }
+  ]
+}

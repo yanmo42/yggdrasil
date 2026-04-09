@@ -84,6 +84,53 @@ The target behavior is described in `docs/notes/WORK-FRONT-DOOR-V2.md`; this doe
   - planner imports are unavailable
   - OpenClaw launch fails when not in print mode
 
+## `ygg frontier`
+
+- mutates state: `indirect`
+- requires: `list` | `current` | `queue` | `sync` | `audit [target]` | `open [target]`
+- optional: `--sc-root`, `--workspace`, `--domain`, `--ygg-root`, `--print-only`, `--json`
+- writes:
+  - `state/ygg/frontier-queue.json` when `sync` or `open` runs
+  - frontier queue active/opened metadata when `open` selects a queued item
+  - planner message stream indirectly when `open` launches a `resume` or `root` command
+- guarantees:
+  - lists Sandy Chaos frontiers from the explicit Ygg frontier registry
+  - can sync a single active-frontier queue from assistant-home Ygg task batons
+  - prefers the queued active/ready frontier before falling back to the Sandy Chaos registry handoff path
+  - supports text and machine-readable JSON output
+- fails when:
+  - requested frontier target is unsupported
+  - frontier registry or queue payload is missing or malformed
+  - Sandy Chaos root or assistant-home workspace cannot be resolved for the requested operation
+
+## `ygg program`
+
+- mutates state: `false`
+- requires: `list` or `show <id>`
+- optional: `--root`, `--json`
+- writes: none
+- guarantees:
+  - reads `state/ygg/programs.json`
+  - supports text and machine-readable JSON output
+  - never mutates registry state
+- fails when:
+  - registry file is missing or malformed
+  - requested program id does not exist
+
+## `ygg idea`
+
+- mutates state: `false`
+- requires: `list` or `show <id>`
+- optional: `--root`, `--json`
+- writes: none
+- guarantees:
+  - reads `state/ygg/ideas.json`
+  - supports text and machine-readable JSON output
+  - never mutates registry state
+- fails when:
+  - registry file is missing or malformed
+  - requested idea id does not exist
+
 ## `ygg branch`
 
 - mutates state: `true`

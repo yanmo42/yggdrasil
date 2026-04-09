@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-02T14:38:00-04:00",
+  "ideas": [
+    {
+      "id": "topology-aware-continuity-retrieval",
+      "title": "Topology-aware continuity retrieval",
+      "status": "incubating",
+      "summary": "Use topology-aware continuity retrieval instead of a flat bag of text.",
+      "origin": "Ian + Solace/Nyx",
+      "links": {
+        "checkpoints": [
+          "state/ygg/checkpoints/2026-04-02T09-30-00+00-00_topological-memory.json"
+        ],
+        "programs": [
+          "ygg-continuity-integration"
+        ],
+        "promotionTargets": [
+          "docs/archive/topological-memory-v1.md"
+        ]
+      },
+      "nextAction": "Build a benchmark and a topology-aware hybrid scorer.",
+      "tags": ["memory", "retrieval", "topology", "continuity"],
+      "notes": []
+    },
+    {
+      "id": "runtime-embodiment-audit",
+      "title": "Runtime embodiment audit",
+      "status": "incubating",
+      "summary": "Track host/runtime changes so continuity retrieval can explain environment drift.",
+      "origin": "Ian",
+      "links": {
+        "programs": [
+          "runtime-observability"
+        ]
+      },
+      "nextAction": "Normalize runtime event surfaces into continuity records.",
+      "tags": ["runtime", "embodiment", "events"],
+      "notes": []
+    }
+  ]
+}

@@ -136,6 +136,41 @@ ygg inventory --json
 ygg inventory --root ~/ygg
 ```
 
+### Inspect semantic program and idea registries
+
+```bash
+ygg program list
+ygg program show ygg-continuity-integration
+ygg program list --json
+ygg idea list
+ygg idea show topology-aware-continuity-retrieval
+ygg idea list --json
+```
+
+### Query continuity state across surfaces
+
+```bash
+ygg retrieve "topology-aware continuity retrieval"
+ygg retrieve "runtime embodiment changed" --strategy recency --explain
+ygg retrieve --json "continuity integration"
+ygg retrieve-benchmark
+ygg retrieve-benchmark --json
+```
+
+`ygg retrieve` queries one normalized corpus built from:
+- `state/ygg/checkpoints/`
+- `state/ygg/ideas.json`
+- `state/ygg/programs.json`
+- `state/runtime/event-queue.jsonl`
+- `state/runtime/promotions.jsonl`
+
+The retrieval strategies are:
+- `keyword`
+- `recency`
+- `topology`
+
+The topology strategy derives inspectable graph links from the normalized records at query time. It does not require a canonical `state/ygg/topology.json`.
+
 ### Run RAVENS v1 flights
 
 ```bash
@@ -225,6 +260,10 @@ ygg suggest "implement the improved theme selector UX"
 ygg suggest --json "implement the improved theme selector UX"
 ygg help suggest --json
 ygg inventory --json
+ygg program list --json
+ygg idea list --json
+ygg retrieve --json "runtime embodiment changed"
+ygg retrieve-benchmark --json
 ygg raven launch --trigger heartbeat "scan env" --json
 ygg raven status --json
 ygg graft propose "Add proposal gate" --json

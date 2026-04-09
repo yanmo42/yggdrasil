@@ -168,6 +168,9 @@ Current verbs:
 - `ygg work`
 - `ygg paths`
 - `ygg inventory`
+- `ygg frontier` (`list`, `current`, `queue`, `sync`, `audit`, `open`)
+- `ygg retrieve`
+- `ygg retrieve-benchmark`
 - `ygg raven` (`launch`, `status`, `inspect`, `return`, `adjudicate`)
 - `ygg graft` (`propose`)
 - `ygg beak` (`propose`)
@@ -191,6 +194,12 @@ ygg explain suggest
 ygg paths check
 ygg suggest "implement the improved theme selector UX"
 ygg inventory
+ygg frontier sync
+ygg frontier queue
+ygg frontier audit
+ygg frontier open --print-only
+ygg retrieve "topology-aware continuity retrieval"
+ygg retrieve-benchmark
 ygg heimdall --show-json
 ygg heimdall --note --ratatoskr
 ygg ratatoskr --event-file /tmp/event.json
@@ -225,15 +234,17 @@ ygg forge --domain <domain> --task <task> "build the next thing"
 ### 10 most useful commands
 
 1. `ygg inventory` — see what Ygg actually has right now.
-2. `ygg status` — see what lanes/tasks are active.
-3. `ygg suggest "..."` — turn a fuzzy request into likely Ygg commands.
-4. `ygg root "..."` — stay in planner/spine mode when things are ambiguous.
-5. `ygg work "..."` — use the flexible natural-language front door.
-6. `ygg branch <domain> <task> ...` — create or refresh a tracked lane.
-7. `ygg resume <domain> <task>` — reopen a known lane with continuity.
-8. `ygg forge --domain <domain> --task <task> "..."` — push a lane toward implementation.
-9. `ygg checkpoint ...` — record a structured continuity checkpoint.
-10. `ygg paths` — inspect the path contract so you know what lives where.
+2. `ygg frontier sync` + `ygg frontier queue` — hydrate the Ygg frontier queue from assistant-home batons, then inspect what is active vs ready.
+3. `ygg frontier audit` — inspect the active Sandy Chaos frontier, proof debt, and next move.
+3. `ygg status` — see what lanes/tasks are active.
+4. `ygg suggest "..."` — turn a fuzzy request into likely Ygg commands.
+5. `ygg root "..."` — stay in planner/spine mode when things are ambiguous.
+6. `ygg work "..."` — use the flexible natural-language front door.
+7. `ygg branch <domain> <task> ...` — create or refresh a tracked lane.
+8. `ygg resume <domain> <task>` — reopen a known lane with continuity.
+9. `ygg forge --domain <domain> --task <task> "..."` — push a lane toward implementation.
+10. `ygg checkpoint ...` — record a structured continuity checkpoint.
+11. `ygg paths` — inspect the path contract so you know what lives where.
 
 ### Common situations
 

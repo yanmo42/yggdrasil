@@ -22,12 +22,22 @@ from ygg.continuity import (
     load_latest_checkpoint,
     write_checkpoint as write_continuity_checkpoint,
 )
+from ygg.continuity_retrieval import run_benchmark, retrieve_continuity
 from ygg.bootstrap_registry import (
     load_registry,
     parse_profile_env,
     read_package_manifest,
     render_path_contract,
     resolve_registry_assignments,
+)
+from ygg.frontier import (
+    build_frontier_audit,
+    current_frontier_payload,
+    frontier_open_payload,
+    list_frontier_queue,
+    list_frontiers,
+    mark_queue_frontier_active,
+    sync_frontier_queue,
 )
 from ygg.heimdall import main as heimdall_main
 from ygg.inventory import build_repo_inventory
@@ -47,6 +57,7 @@ from ygg.ravens_v1 import (
     record_probe,
 )
 from ygg.ratatoskr import main as ratatoskr_main
+from ygg.semantic_registry import get_registry_item, list_registry_items
 
 HOME = Path.home()
 RUNTIME_PATHS: RuntimePaths = resolve_runtime_paths()
@@ -64,6 +75,10 @@ WORKSPACE_PERSONA_MODE_FILE = WORKSPACE / "state" / "persona-mode.json"
 RAVEN_STATE_DIR = STATE_DIR
 DEFAULT_SESSION = "planner--main"
 DEFAULT_OPENCLAW_BIN = "openclaw"
+
+
+def _resume_script_cmd(*parts: str) -> list[str]:
+    return [sys.executable, str(RESUME_SCRIPT), "--workspace", str(WORKSPACE), *parts]
 PROFILE_DIR = YGG_HOME / "state" / "profiles"
 DEFAULT_BOOTSTRAP_PROFILE = os.environ.get("BOOTSTRAP_PROFILE", "stable")
 DEFAULT_COMPONENT_REGISTRY = PROFILE_DIR / "components.yaml"
@@ -154,7 +169,71 @@ EXPLAIN_CARDS = {
             "ygg inventory --json",
             "ygg inventory --root ~/ygg",
         ],
-        "next": ["status", "bootstrap", "paths"],
+        "next": ["frontier", "status", "bootstrap", "paths"],
+    },
+    "frontier": {
+        "purpose": "Audit the current Sandy Chaos research frontier so Ygg can expose foundations, evidence, proof debt, and the best next move.",
+        "when_to_use": [
+            "When you want Ygg to help Sandy Chaos become more rigorous rather than merely more organized.",
+            "When you need one compact readout of active frontier status, missing foundations, and next-step pressure.",
+        ],
+        "examples": [
+            "ygg frontier current",
+            "ygg frontier audit",
+            "ygg frontier audit --json",
+        ],
+        "next": ["program", "idea", "status"],
+    },
+    "program": {
+        "purpose": "Inspect the semantic program registry under Ygg-owned state.",
+        "when_to_use": [
+            "When you want the current durable work inventory without reading raw JSON by hand.",
+            "When machine or human callers need an inspectable program list or one exact record.",
+        ],
+        "examples": [
+            "ygg program list",
+            "ygg program list --json",
+            "ygg program show ygg-continuity-integration",
+        ],
+        "next": ["idea", "inventory", "status"],
+    },
+    "idea": {
+        "purpose": "Inspect the semantic idea registry under Ygg-owned state.",
+        "when_to_use": [
+            "When you want the incubating concept inventory without opening the raw file directly.",
+            "When machine or human callers need an inspectable idea list or one exact record.",
+        ],
+        "examples": [
+            "ygg idea list",
+            "ygg idea list --json",
+            "ygg idea show topology-aware-continuity-retrieval",
+        ],
+        "next": ["program", "inventory", "status"],
+    },
+    "retrieve": {
+        "purpose": "Query normalized Ygg continuity state with keyword, recency, or topology-aware retrieval.",
+        "when_to_use": [
+            "When you want one continuity query across checkpoints, registries, runtime events, and promotions.",
+            "When you want inspectable retrieval scoring rather than opening raw state files by hand.",
+        ],
+        "examples": [
+            'ygg retrieve "topology-aware continuity retrieval"',
+            'ygg retrieve "runtime embodiment changed" --strategy recency --explain',
+            'ygg retrieve "continuity integration" --json',
+        ],
+        "next": ["retrieve-benchmark", "program", "idea", "status"],
+    },
+    "retrieve-benchmark": {
+        "purpose": "Run the continuity retrieval benchmark across the supported retrieval strategies.",
+        "when_to_use": [
+            "When adjusting retrieval weights or graph derivation and you want a fast regression check.",
+            "When you want the baseline comparison to be explicit and repeatable.",
+        ],
+        "examples": [
+            "ygg retrieve-benchmark",
+            "ygg retrieve-benchmark --json",
+        ],
+        "next": ["retrieve", "idea", "program"],
     },
     "root": {
         "purpose": "Force direct planner-spine entry with no aggressive route guess.",
@@ -410,6 +489,88 @@ VERB_CONTRACTS = {
         "fails_when": [
             "root path does not exist",
             "inventory root is not readable",
+        ],
+    },
+    "frontier": {
+        "mutates_state": "indirect",
+        "requires": ["subcommand"],
+        "optional": ["list|current|queue|sync|audit|open", "<target> (optional for audit/open)", "--sc-root", "--workspace", "--domain", "--ygg-root", "--print-only", "--json"],
+        "writes": ["state/ygg/frontier-queue.json when sync/open runs", "frontier queue active/opened metadata when frontier open selects a queued item", "planner message stream indirectly when frontier open launches a resume/root command"],
+        "calls": ["frontier.list_frontiers", "frontier.current_frontier_payload", "frontier.list_frontier_queue", "frontier.sync_frontier_queue", "frontier.build_frontier_audit", "frontier.frontier_open_payload", "frontier.mark_queue_frontier_active"],
+        "guarantees": [
+            "lists and audits Sandy Chaos frontiers using a source-explicit registry-backed schema",
+            "can sync one active-frontier queue from assistant-home Ygg batons",
+            "prefers the queued active/ready frontier before falling back to the Sandy Chaos registry handoff path",
+            "returns machine-readable JSON when requested",
+        ],
+        "fails_when": [
+            "requested target is unsupported",
+            "frontier registry or queue payload is missing or malformed in ways that prevent resolution",
+            "Sandy Chaos root or assistant-home workspace cannot be resolved for the requested operation",
+        ],
+    },
+    "program": {
+        "mutates_state": False,
+        "requires": ["subcommand"],
+        "optional": ["list|show", "<id> (for show)", "--root", "--json"],
+        "writes": [],
+        "calls": ["semantic_registry.list_registry_items", "semantic_registry.get_registry_item"],
+        "guarantees": [
+            "reads the canonical program registry from state/ygg/programs.json",
+            "supports human-readable text and machine-readable JSON",
+            "never mutates registry state",
+        ],
+        "fails_when": [
+            "registry file is missing or malformed",
+            "requested program id does not exist",
+        ],
+    },
+    "idea": {
+        "mutates_state": False,
+        "requires": ["subcommand"],
+        "optional": ["list|show", "<id> (for show)", "--root", "--json"],
+        "writes": [],
+        "calls": ["semantic_registry.list_registry_items", "semantic_registry.get_registry_item"],
+        "guarantees": [
+            "reads the canonical idea registry from state/ygg/ideas.json",
+            "supports human-readable text and machine-readable JSON",
+            "never mutates registry state",
+        ],
+        "fails_when": [
+            "registry file is missing or malformed",
+            "requested idea id does not exist",
+        ],
+    },
+    "retrieve": {
+        "mutates_state": False,
+        "requires": ["query"],
+        "optional": ["--root", "--strategy", "--limit", "--json", "--explain"],
+        "writes": [],
+        "calls": ["continuity_retrieval.retrieve_continuity"],
+        "guarantees": [
+            "queries checkpoints, semantic registries, runtime events, and promotions through one normalized corpus",
+            "supports keyword, recency, and topology-aware strategies",
+            "can show score explanations for inspectability",
+        ],
+        "fails_when": [
+            "root path does not exist",
+            "retrieval strategy is unknown",
+            "continuity source files are malformed",
+        ],
+    },
+    "retrieve-benchmark": {
+        "mutates_state": False,
+        "requires": [],
+        "optional": ["--root", "--benchmark", "--limit", "--json"],
+        "writes": [],
+        "calls": ["continuity_retrieval.run_benchmark"],
+        "guarantees": [
+            "runs the same benchmark cases against keyword, recency, and topology-aware retrieval",
+            "keeps benchmark data inspectable as plain JSON",
+        ],
+        "fails_when": [
+            "root path does not exist",
+            "benchmark file is missing or malformed",
         ],
     },
     "root": {
@@ -1619,12 +1780,469 @@ def cmd_nyx(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_work(args: argparse.Namespace) -> int:
+# ---------------------------------------------------------------------------
+# ygg work NL + context layer
+# ---------------------------------------------------------------------------
+
+WORK_AUTO_DISPATCH_THRESHOLD = 0.75
+
+# Known project roots used to tag the current working directory. The order
+# matters when one project is nested inside another — put the more specific
+# path first.
+WORK_CWD_PROJECTS: list[tuple[Path, str]] = [
+    (HOME / "ygg", "ygg"),
+    (HOME / "projects" / "sandy-chaos", "sandy-chaos"),
+    (HOME / ".openclaw" / "workspace-claw-main", "openclaw-workspace"),
+    (HOME / "projects" / "nyx-nlp", "nyx-nlp"),
+]
+
+# When CWD is inside one of the known projects above, these domain prefixes
+# are used to find a single matching active task for context boosting.
+WORK_PROJECT_TO_DOMAIN_PREFIXES: dict[str, tuple[str, ...]] = {
+    "ygg": ("ygg-dev", "ygg"),
+    "sandy-chaos": ("sandy-chaos",),
+    "openclaw-workspace": ("openclaw", "workspace"),
+    "nyx-nlp": ("nyx-nlp", "nyx"),
+}
+
+
+def _detect_cwd_project() -> dict[str, str] | None:
+    """Return {name, root, cwd} if CWD is inside a known project, else None."""
+    try:
+        cwd = Path.cwd().resolve()
+    except (FileNotFoundError, OSError):
+        return None
+    for project_root, name in WORK_CWD_PROJECTS:
+        try:
+            root_resolved = project_root.resolve()
+        except (FileNotFoundError, OSError):
+            continue
+        try:
+            cwd.relative_to(root_resolved)
+        except ValueError:
+            continue
+        return {
+            "name": name,
+            "root": str(root_resolved),
+            "cwd": str(cwd),
+        }
+    return None
+
+
+def _work_programs_summary() -> list[dict[str, str]]:
+    try:
+        payload = list_registry_items(YGG_HOME, "program")
+    except (FileNotFoundError, ValueError, OSError):
+        return []
+    rows: list[dict[str, str]] = []
+    for item in payload.get("items", []) or []:
+        rows.append(
+            {
+                "id": str(item.get("id", "")),
+                "title": str(item.get("title", "")),
+                "status": str(item.get("status", "")),
+                "priority": str(item.get("priority", "")),
+                "nextAction": str(item.get("nextAction", "")),
+            }
+        )
+    return rows
+
+
+def _work_ideas_summary() -> list[dict[str, str]]:
+    try:
+        payload = list_registry_items(YGG_HOME, "idea")
+    except (FileNotFoundError, ValueError, OSError):
+        return []
+    rows: list[dict[str, str]] = []
+    for item in payload.get("items", []) or []:
+        rows.append(
+            {
+                "id": str(item.get("id", "")),
+                "title": str(item.get("title", "")),
+                "status": str(item.get("status", "")),
+                "claimTier": str(item.get("claimTier", "")),
+                "nextAction": str(item.get("nextAction", "")),
+            }
+        )
+    return rows
+
+
+def _work_latest_checkpoint_summary() -> dict[str, str] | None:
+    try:
+        checkpoint = load_latest_checkpoint(YGG_HOME)
+    except Exception:
+        return None
+    if checkpoint is None:
+        return None
+    data = checkpoint.to_dict()
+    return {
+        "timestamp": str(data.get("timestamp", "")),
+        "lane": str(data.get("lane", "")),
+        "summary": str(data.get("summary", "")),
+        "disposition": str(data.get("disposition", "")),
+        "next_action": str(data.get("next_action", "")),
+    }
+
+
+def _gather_work_context(tasks) -> dict[str, object]:
+    try:
+        cwd_str = str(Path.cwd())
+    except (FileNotFoundError, OSError):
+        cwd_str = None
+    return {
+        "cwd": cwd_str,
+        "cwd_project": _detect_cwd_project(),
+        "active_tasks": _active_task_rows(tasks),
+        "programs": _work_programs_summary(),
+        "ideas": _work_ideas_summary(),
+        "latest_checkpoint": _work_latest_checkpoint_summary(),
+    }
+
+
+def _boost_route_with_context(route, context: dict[str, object], request: str):
+    """Use the context snapshot to tighten routing.
+
+    Two boost paths:
+    1. Target-confirming: route already has a target and CWD project matches
+       the target's domain prefixes → bump confidence (the filesystem agrees
+       with the router).
+    2. Target-filling: route has no target but CWD project has exactly one
+       active task → fill in the target and set a sensible action.
+
+    Returns (possibly_updated_route, boost_reason_or_None).
+    """
+    cwd_project = context.get("cwd_project")
+    if not isinstance(cwd_project, dict):
+        return route, None
+
+    project_name = cwd_project.get("name")
+    if not project_name:
+        return route, None
+
+    prefixes = WORK_PROJECT_TO_DOMAIN_PREFIXES.get(project_name, ())
+    if not prefixes:
+        return route, None
+
+    # Path 1: target-confirming boost.
+    if route.domain and route.task:
+        domain_matches_project = any(
+            str(route.domain).startswith(p) for p in prefixes
+        )
+        if not domain_matches_project:
+            return route, None
+        if route.confidence >= 0.85:
+            # Already high confidence — nothing to gain from the boost.
+            return route, None
+        boost_reason = (
+            f"CWD is inside `{project_name}` and the resolved target "
+            f"{route.domain}/{route.task} lives in the same project."
+        )
+        boosted = RouteSuggestion(
+            action=route.action,
+            confidence=max(route.confidence, 0.82),
+            reason=f"{route.reason} | {boost_reason}",
+            needs_approval=route.needs_approval,
+            domain=route.domain,
+            task=route.task,
+        )
+        return boosted, boost_reason
+
+    # Path 2: target-filling boost.
+    active_rows = context.get("active_tasks") or []
+    matching = [
+        row
+        for row in active_rows
+        if any(str(row.get("domain", "")).startswith(p) for p in prefixes)
+    ]
+    if len(matching) != 1:
+        return route, None
+
+    only = matching[0]
+    new_action = route.action
+    if route.action in {"stay_in_planner", "ask_for_clarification"}:
+        if _looks_like_impl(request):
+            new_action = "suggest_spawn_codex"
+        elif _looks_like_continue(request):
+            new_action = "suggest_resume_active_task"
+
+    boost_reason = (
+        f"CWD is inside `{project_name}` and there is exactly one active task "
+        f"under that project ({only.get('domain')}/{only.get('task')})."
+    )
+    boosted = RouteSuggestion(
+        action=new_action,
+        confidence=max(route.confidence, 0.78),
+        reason=f"{route.reason} | {boost_reason}",
+        needs_approval=route.needs_approval,
+        domain=only.get("domain"),
+        task=only.get("task"),
+    )
+    return boosted, boost_reason
+
+
+def _decide_work_dispatch(request: str, route) -> dict[str, object]:
+    """Pick what ygg work should actually launch, with a human-readable why."""
+    confident = route.confidence >= WORK_AUTO_DISPATCH_THRESHOLD
+
+    if (
+        route.action == "suggest_spawn_codex"
+        and route.domain
+        and route.task
+        and confident
+    ):
+        preview = _quoted_command(
+            ["ygg", "forge", "--domain", route.domain, "--task", route.task],
+            request,
+        )
+        return {
+            "kind": "forge",
+            "command_preview": preview,
+            "explanation": (
+                f"Request looks implementation-shaped and points at the active lane "
+                f"{route.domain}/{route.task}. Confidence {route.confidence:.2f} is at or "
+                f"above the auto-dispatch threshold ({WORK_AUTO_DISPATCH_THRESHOLD:.2f}), "
+                f"so ygg is launching a forge-style planner boot packet — equivalent to "
+                f"running `ygg forge` — instead of the generic planner front door. "
+                f"That bakes an implementation/delegation bias into the session."
+            ),
+        }
+
+    if (
+        route.action == "suggest_resume_active_task"
+        and route.domain
+        and route.task
+        and confident
+    ):
+        preview = _render_cmd(["ygg", "resume", route.domain, route.task])
+        return {
+            "kind": "resume",
+            "command_preview": preview,
+            "explanation": (
+                f"Request looks like continuation work on {route.domain}/{route.task}. "
+                f"Confidence {route.confidence:.2f} is at or above the auto-dispatch "
+                f"threshold ({WORK_AUTO_DISPATCH_THRESHOLD:.2f}), so ygg is launching a "
+                f"resume-style planner boot packet directly — equivalent to "
+                f"`ygg resume {route.domain} {route.task}` — so you land back in the "
+                f"right lane with continuity context already loaded."
+            ),
+        }
+
+    # Passthrough — explain why we didn't auto-dispatch.
+    reasons: list[str] = []
+    if route.action not in {"suggest_spawn_codex", "suggest_resume_active_task"}:
+        reasons.append(f"route action is `{route.action}` (no lane-specific dispatch)")
+    elif not (route.domain and route.task):
+        reasons.append("no concrete target lane resolved from the request or context")
+    elif not confident:
+        reasons.append(
+            f"confidence {route.confidence:.2f} is below the auto-dispatch threshold "
+            f"({WORK_AUTO_DISPATCH_THRESHOLD:.2f})"
+        )
+    why = " and ".join(reasons) if reasons else "no stronger dispatch applied"
+    return {
+        "kind": "planner-passthrough",
+        "command_preview": "work.py (assistant-home planner front door)",
+        "explanation": (
+            f"Falling back to the planner front door because {why}. The planner "
+            f"session will open and the human stays in the loop for disambiguation."
+        ),
+    }
+
+
+def _build_work_payload(
+    *,
+    request: str,
+    route,
+    context: dict[str, object],
+    dispatch: dict[str, object],
+    context_boost: str | None,
+) -> dict[str, object]:
+    return {
+        "request": request,
+        "route": {
+            "action": route.action,
+            "confidence": route.confidence,
+            "reason": route.reason,
+            "needs_approval": route.needs_approval,
+            "domain": route.domain,
+            "task": route.task,
+        },
+        "context_boost": context_boost,
+        "dispatch": dispatch,
+        "context": context,
+    }
+
+
+def _print_work_plan(payload: dict[str, object]) -> None:
+    print("Ygg work\n")
+    request = payload["request"]
+    route = payload["route"]
+    context = payload.get("context", {}) or {}
+    dispatch = payload.get("dispatch", {}) or {}
+    boost = payload.get("context_boost")
+
+    print(f"request:    {request}")
+
+    conf = float(route["confidence"])
+    band = _confidence_band(conf)
+    low_flag = "  !" if band == "low" else ""
+    print(f"confidence: {conf:.2f}  ({band}){low_flag}")
+
+    if route.get("domain") or route.get("task"):
+        print(f"target:     {route.get('domain') or '?'} / {route.get('task') or '?'}")
+
+    print(f"action:     {route['action']}")
+    reason = route.get("reason")
+    if reason:
+        print(f"reason:     {reason}")
+    if boost:
+        print(f"ctx boost:  {boost}")
+
+    print(f"\ndispatch:   {dispatch.get('kind', 'unknown')}")
+    if dispatch.get("command_preview"):
+        print(f"  → {dispatch['command_preview']}")
+    if dispatch.get("explanation"):
+        print(f"  why: {dispatch['explanation']}")
+
+    print("\n── context snapshot ──")
+
+    cwd_project = context.get("cwd_project")
+    cwd = context.get("cwd") or "(unknown)"
+    if isinstance(cwd_project, dict) and cwd_project.get("name"):
+        print(f"cwd:        {cwd}")
+        print(f"project:    {cwd_project['name']} ({cwd_project.get('root', '?')})")
+    else:
+        print(f"cwd:        {cwd}  (no known project match)")
+
+    active = context.get("active_tasks") or []
+    if active:
+        print(f"\nactive tasks ({len(active)}):")
+        for row in active:
+            freshness = row.get("freshness", "")
+            flag = "  !" if freshness == "stale" else ""
+            print(f"  [{row.get('domain')}] {row.get('task')}  {freshness}{flag}")
+            if row.get("next_action"):
+                print(f"    → {row['next_action']}")
+    else:
+        print("\nactive tasks: (none tracked)")
+
+    programs = context.get("programs") or []
+    if programs:
+        print(f"\nprograms ({len(programs)}):")
+        for row in programs:
+            status = row.get("status", "")
+            priority = row.get("priority", "")
+            tag = f" [{status}]" if status else ""
+            if priority:
+                tag += f" ({priority})"
+            print(f"  {row.get('id')}: {row.get('title')}{tag}")
+            if row.get("nextAction"):
+                print(f"    → {row['nextAction']}")
+
+    ideas = context.get("ideas") or []
+    if ideas:
+        print(f"\nideas ({len(ideas)}):")
+        for row in ideas:
+            status = row.get("status", "")
+            claim = row.get("claimTier", "")
+            tag = f" [{status}]" if status else ""
+            if claim:
+                tag += f" ({claim})"
+            print(f"  {row.get('id')}: {row.get('title')}{tag}")
+
+    cp = context.get("latest_checkpoint")
+    if cp:
+        print("\nlatest checkpoint:")
+        for key in ("timestamp", "lane", "disposition", "next_action", "summary"):
+            value = cp.get(key) if isinstance(cp, dict) else None
+            if value:
+                print(f"  {key}: {value}")
+
+
+def _work_passthrough(args: argparse.Namespace) -> int:
     cmd = [sys.executable, str(WORK_SCRIPT)]
     if PATH_CONTRACT_FILE is not None:
         cmd.extend(["--paths-file", str(PATH_CONTRACT_FILE)])
     cmd.extend(args.request)
     return _run(cmd)
+
+
+def cmd_work(args: argparse.Namespace) -> int:
+    request = _compact(" ".join(args.request))
+
+    # No request → preserve the legacy passthrough behavior exactly.
+    if not request:
+        return _work_passthrough(args)
+
+    _require_workspace_imports()
+
+    tasks = _active_tasks()
+    route = classify_request(request, tasks)
+    route = _augment_route_for_suggest(route, request, tasks)
+
+    context = _gather_work_context(tasks)
+    route, context_boost = _boost_route_with_context(route, context, request)
+
+    dispatch = _decide_work_dispatch(request, route)
+    payload = _build_work_payload(
+        request=request,
+        route=route,
+        context=context,
+        dispatch=dispatch,
+        context_boost=context_boost,
+    )
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+        return 0
+
+    _print_work_plan(payload)
+
+    if args.plan_only:
+        return 0
+
+    # Actually launch the dispatched action.
+    if dispatch["kind"] == "forge":
+        print()
+        packet = _forced_packet(
+            request=request,
+            action="suggest_spawn_codex",
+            reason=f"ygg work NL dispatch: {route.reason}",
+            session=args.session,
+            needs_approval=False,
+            domain=route.domain,
+            task=route.task,
+            confidence=route.confidence,
+        )
+        return _launch_packet(
+            packet,
+            session=args.session,
+            openclaw_bin=args.openclaw_bin,
+            print_packet=args.print_packet,
+        )
+
+    if dispatch["kind"] == "resume":
+        print()
+        packet = _forced_packet(
+            request=request,
+            action="suggest_resume_active_task",
+            reason=f"ygg work NL dispatch: {route.reason}",
+            session=args.session,
+            needs_approval=False,
+            domain=route.domain,
+            task=route.task,
+            confidence=route.confidence,
+        )
+        return _launch_packet(
+            packet,
+            session=args.session,
+            openclaw_bin=args.openclaw_bin,
+            print_packet=args.print_packet,
+        )
+
+    # planner-passthrough
+    print()
+    return _work_passthrough(args)
 
 
 def cmd_root(args: argparse.Namespace) -> int:
@@ -1677,7 +2295,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     if args.continuity:
         print(json.dumps(_continuity_payload(), indent=2, ensure_ascii=False))
         return 0
-    cmd = [sys.executable, str(RESUME_SCRIPT), "status"]
+    cmd = _resume_script_cmd("status")
     if args.domain:
         cmd.append(_slugify(args.domain))
     return _run(cmd)
@@ -1924,6 +2542,457 @@ def cmd_inventory(args: argparse.Namespace) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
     _print_inventory_text(payload)
+    return 0
+
+
+def _print_frontier_queue_text(payload: dict[str, object]) -> None:
+    print("Ygg frontier queue\n")
+    queue = payload.get('queue') or {}
+    if queue.get('path'):
+        print(f"queue: {queue['path']}")
+    if queue.get('workspaceRoot'):
+        print(f"workspace: {queue['workspaceRoot']}")
+    print(f"count: {payload['count']}")
+    if queue.get('activeFrontierId'):
+        print(f"active: {queue['activeFrontierId']}")
+    print("")
+
+    for row in payload.get('items') or []:
+        marker = '*' if row.get('id') == queue.get('activeFrontierId') or row.get('queueStatus') == 'active' else '-'
+        print(f"{marker} {row['id']} [{row['queueStatus']}] {row['title']}")
+        print(f"  task={row['domain']}:{row['task']} priority={row['priority']} baton={row['batonStatus']}")
+        if row.get('objective'):
+            print(f"  objective: {row['objective'].splitlines()[0]}")
+        if row.get('nextAction'):
+            print(f"  next: {row['nextAction'].splitlines()[0]}")
+        if row.get('selectionReason'):
+            print(f"  why: {row['selectionReason']}")
+        print("")
+
+
+def _print_frontier_sync_text(payload: dict[str, object]) -> None:
+    print("Ygg frontier sync\n")
+    print(f"queue: {payload['queuePath']}")
+    print(f"workspace: {payload['workspaceRoot']}")
+    print(f"domain: {payload['domain']}")
+    print(f"count: {payload['count']}")
+    print(f"active: {payload.get('activeFrontierId') or '(none)'}")
+
+
+def _print_frontier_list_text(payload: dict[str, object]) -> None:
+    print("Ygg frontier list\n")
+    print(f"sc root: {payload['scRoot']}")
+    registry = payload.get('registry') or {}
+    if registry.get('path'):
+        print(f"registry: {registry['path']}")
+    print(f"count: {payload['count']}")
+    print("")
+
+    for row in payload.get('items') or []:
+        marker = "*" if row.get('default') else "-"
+        load_bearing = "load-bearing" if row.get('loadBearing') else "non-load-bearing"
+        print(
+            f"{marker} {row['id']} [{row['status']}] {row['title']}"
+        )
+        print(
+            f"  tier={row['claimTier']} owner={row['ownerSurface']} verdict={row['auditVerdict']} readiness={row['promotionReadiness']} {load_bearing}"
+        )
+        print(
+            f"  evidence: docs={row['evidence']['docs']} artifacts={row['evidence']['artifacts']} tests={row['evidence']['tests']} benchmarks={row['evidence']['benchmarks']} result={'yes' if row['evidence']['benchmarkResultExists'] else 'no'}"
+        )
+        print(f"  gaps: {row['gapCount']}")
+        if row.get('operatorReading'):
+            print(f"  read: {row['operatorReading']}")
+        if row.get('nextMoveAction'):
+            print(f"  next: [{row.get('nextMoveType')}] {row['nextMoveAction']}")
+        print("")
+
+
+
+def _print_frontier_open_text(payload: dict[str, object]) -> None:
+    print("Ygg frontier open\n")
+    print(f"target: {payload['target']['id']}")
+    print(f"title: {payload['target']['title']}")
+    print(f"status: {payload['target']['status']}")
+    print(f"claim tier: {payload['target']['claimTier']}")
+    if payload.get('frontierNote'):
+        print(f"frontier note: {payload['frontierNote']}")
+    print(f"objective: {payload['summary']['objective']}")
+    print(f"audit verdict: {payload['summary']['auditVerdict']}")
+    if payload['summary'].get('operatorReading'):
+        print(f"read: {payload['summary']['operatorReading']}")
+    print("\nopen decision:")
+    print(f"- mode: {payload['openDecision']['mode']}")
+    print(f"- reason: {payload['openDecision']['reason']}")
+    print(f"- hint: {payload['openDecision']['launchHint']}")
+    print(f"- command: {_render_cmd(payload['openDecision']['command'])}")
+    next_move = payload.get('nextMove') or {}
+    if next_move:
+        print("\nnext move:")
+        print(f"- type: {next_move.get('type', '')}")
+        print(f"- action: {next_move.get('action', '')}")
+
+
+
+def _print_frontier_current_text(payload: dict[str, object]) -> None:
+    print("Ygg frontier current\n")
+    print(f"sc root: {payload['scRoot']}")
+    registry = payload.get('registry') or {}
+    if registry.get('path'):
+        print(f"registry: {registry['path']}")
+    print(f"target: {payload['target']['id']}")
+    print(f"title: {payload['target']['title']}")
+    if payload.get('frontierNote'):
+        print(f"frontier note: {payload['frontierNote']}")
+    print(f"reason: {payload['reason']}")
+
+
+
+def _print_frontier_audit_text(payload: dict[str, object]) -> None:
+    target = payload['target']
+    summary = payload['summary']
+    evidence = payload['evidence']
+    gaps = payload['gaps']
+    promotion = payload['promotion']
+    next_move = payload['nextMove']
+
+    print("Ygg frontier audit\n")
+    registry = payload.get('registry') or {}
+    if registry.get('path'):
+        print(f"registry: {registry['path']}")
+        if registry.get('updatedAt'):
+            print(f"registry updated: {registry['updatedAt']}")
+        print("")
+    print(f"target: {target['id']}")
+    print(f"title: {target['title']}")
+    print(f"status: {target['status']}")
+    print(f"claim tier: {target['claimTier']}")
+    print(f"owner surface: {target['ownerSurface']}")
+    print(f"authoritative source: {target['authoritativeSource']}")
+
+    print("\nsummary:")
+    print(f"- objective: {summary['objective']}")
+    print(f"- why now: {summary['whyNow']}")
+    print(f"- load-bearing: {'yes' if summary.get('loadBearing') else 'no'}")
+    print(f"- audit verdict: {summary['auditVerdict']}")
+    print(f"- operator reading: {summary['operatorReading']}")
+
+    print("\nfoundations:")
+    for section in ('mathematical', 'physical', 'modeling'):
+        print(f"- {section}:")
+        for row in payload['foundations'][section]:
+            print(f"  - {row['name']} [{row['status']}; {row['role']}]")
+            print(f"    source: {row['source']}")
+            if row.get('notes'):
+                print(f"    notes: {row['notes']}")
+
+    print("\nevidence:")
+    print(f"- docs: {len(evidence.get('docs') or [])}")
+    print(f"- artifacts: {len(evidence.get('artifacts') or [])}")
+    print(f"- tests: {len(evidence.get('tests') or [])}")
+    print(f"- benchmarks: {len(evidence.get('benchmarks') or [])}")
+    quality = evidence.get('quality') or {}
+    if quality:
+        print("- quality:")
+        for key in ('documentation', 'implementation', 'validation', 'traceability'):
+            if key in quality:
+                print(f"  - {key}: {quality[key]}")
+
+    print("\nblocking gaps:")
+    for item in gaps.get('blockingGaps') or []:
+        print(f"- {item}")
+
+    extra_gap_sections = ('missingAssumptions', 'missingNullModels', 'missingBenchmarks', 'missingArtifacts', 'ambiguities', 'contradictionRisks')
+    for section in extra_gap_sections:
+        rows = gaps.get(section) or []
+        if not rows:
+            continue
+        print(f"\n{section}:")
+        for item in rows:
+            print(f"- {item}")
+
+    print("\npromotion posture:")
+    print(f"- readiness: {promotion['readiness']}")
+    print(f"- disposition hint: {promotion['dispositionHint']}")
+    print(f"- why: {promotion['why']}")
+
+    print("\nnext move:")
+    print(f"- type: {next_move['type']}")
+    print(f"- action: {next_move['action']}")
+    print(f"- why: {next_move['why']}")
+    print(f"- expected gain: {next_move['expectedGain']}")
+
+
+
+def cmd_frontier_list(args: argparse.Namespace) -> int:
+    payload = list_frontiers(args.sc_root, ygg_root=args.ygg_root)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_frontier_list_text(payload)
+    return 0
+
+
+
+def cmd_frontier_queue(args: argparse.Namespace) -> int:
+    payload = list_frontier_queue(args.ygg_root)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_frontier_queue_text(payload)
+    return 0
+
+
+
+def cmd_frontier_sync(args: argparse.Namespace) -> int:
+    payload = sync_frontier_queue(args.workspace, ygg_root=args.ygg_root, domain=args.domain)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_frontier_sync_text(payload)
+    return 0
+
+
+
+def cmd_frontier_open(args: argparse.Namespace) -> int:
+    sync_frontier_queue(args.workspace, ygg_root=args.ygg_root, domain=args.domain)
+    try:
+        payload = frontier_open_payload(args.sc_root, args.target, ygg_root=args.ygg_root)
+    except KeyError as exc:
+        raise SystemExit(exc.args[0]) from exc
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    if args.print_only:
+        _print_frontier_open_text(payload)
+        return 0
+
+    if str(payload.get('registry', {}).get('path', '')).endswith('frontier-queue.json'):
+        target = payload.get('target') or {}
+        target_id = target.get('id')
+        if isinstance(target_id, str) and target_id:
+            mark_queue_frontier_active(target_id, ygg_root=args.ygg_root)
+
+    command = payload['openDecision']['command']
+    mode = payload['openDecision']['mode']
+    if command[:2] == ['ygg', 'resume']:
+        ns = argparse.Namespace(domain=command[2], task=command[3], semantic=False, max_chars=4000, agent='claw', openclaw_bin=args.openclaw_bin, print_only=False)
+        return cmd_resume(ns)
+    if command[:2] == ['ygg', 'root']:
+        ns = argparse.Namespace(request=command[2] if len(command) > 2 else None, session=args.session, openclaw_bin=args.openclaw_bin, print_packet=False)
+        return cmd_root(ns)
+    if command[:2] == ['ygg', 'branch']:
+        ns = argparse.Namespace(domain=command[2], task=command[3], objective=None, current_state=None, next_action=None, status='active', priority='medium', locked=[], rejected=[], reopen=[], artifact=[], agent='claw', dry_run=False)
+        # frontier-open branch fallback currently prints the decision instead of mutating unexpectedly
+        _print_frontier_open_text(payload)
+        print('\n(branch creation is not auto-launched yet; run the printed command explicitly if desired)')
+        return 0
+    _print_frontier_open_text(payload)
+    return 0
+
+
+
+def cmd_frontier_current(args: argparse.Namespace) -> int:
+    payload = current_frontier_payload(args.sc_root, ygg_root=args.ygg_root)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_frontier_current_text(payload)
+    return 0
+
+
+
+def cmd_frontier_audit(args: argparse.Namespace) -> int:
+    try:
+        payload = build_frontier_audit(args.sc_root, args.target, ygg_root=args.ygg_root)
+    except KeyError as exc:
+        raise SystemExit(exc.args[0]) from exc
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_frontier_audit_text(payload)
+    return 0
+
+
+def _registry_list_payload(root: Path, kind: str) -> dict[str, object]:
+    payload = list_registry_items(root, kind)
+    return {
+        "kind": kind,
+        "root": str(root),
+        "path": str(payload["path"]),
+        "version": payload.get("version"),
+        "updatedAt": payload.get("updatedAt"),
+        "count": len(payload["items"]),
+        "items": payload["items"],
+    }
+
+
+def _registry_show_payload(root: Path, kind: str, item_id: str) -> dict[str, object]:
+    payload = list_registry_items(root, kind)
+    item = get_registry_item(root, kind, item_id)
+    return {
+        "kind": kind,
+        "root": str(root),
+        "path": str(payload["path"]),
+        "version": payload.get("version"),
+        "updatedAt": payload.get("updatedAt"),
+        "item": item,
+    }
+
+
+def _print_registry_list_text(payload: dict[str, object]) -> None:
+    kind = str(payload["kind"])
+    items = payload.get("items") or []
+    print(f"Ygg {kind} registry\n")
+    print(f"root: {payload['root']}")
+    print(f"path: {payload['path']}")
+    print(f"updatedAt: {payload.get('updatedAt') or '(unknown)'}")
+    print(f"count: {payload['count']}")
+    if not items:
+        return
+    print("")
+    for row in items:
+        title = row.get("title") or "(untitled)"
+        status = row.get("status") or "unknown"
+        summary = _compact(str(row.get("summary") or ""))
+        print(f"- {row.get('id')} [{status}] {title}")
+        if summary:
+            print(f"  {summary}")
+
+
+def _print_registry_show_text(payload: dict[str, object]) -> None:
+    kind = str(payload["kind"])
+    item = payload["item"]
+    print(f"Ygg {kind}\n")
+    print(f"id: {item.get('id')}")
+    print(f"title: {item.get('title') or '(untitled)'}")
+    print(f"status: {item.get('status') or '(unknown)'}")
+    print(f"path: {payload['path']}")
+    print(f"updatedAt: {payload.get('updatedAt') or '(unknown)'}")
+    for key, value in item.items():
+        if key in {"id", "title", "status"}:
+            continue
+        rendered = json.dumps(value, indent=2, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)
+        print(f"{key}: {rendered}")
+
+
+def _resolve_registry_root(root_arg: str) -> Path:
+    root = Path(root_arg).expanduser().resolve()
+    if not root.exists():
+        raise SystemExit(f"Registry root does not exist: {root}")
+    return root
+
+
+def _load_registry_payload_or_die(root: Path, kind: str) -> dict[str, object]:
+    try:
+        return _registry_list_payload(root, kind)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def cmd_program_list(args: argparse.Namespace) -> int:
+    payload = _load_registry_payload_or_die(_resolve_registry_root(args.root), "program")
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_list_text(payload)
+    return 0
+
+
+def cmd_program_show(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    try:
+        payload = _registry_show_payload(root, "program", args.program_id)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(str(exc)) from exc
+    except KeyError as exc:
+        raise SystemExit(exc.args[0]) from exc
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_show_text(payload)
+    return 0
+
+
+def cmd_idea_list(args: argparse.Namespace) -> int:
+    payload = _load_registry_payload_or_die(_resolve_registry_root(args.root), "idea")
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_list_text(payload)
+    return 0
+
+
+def cmd_idea_show(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    try:
+        payload = _registry_show_payload(root, "idea", args.idea_id)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(str(exc)) from exc
+    except KeyError as exc:
+        raise SystemExit(exc.args[0]) from exc
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_registry_show_text(payload)
+    return 0
+
+
+def _print_retrieve_text(payload: dict[str, object], *, explain: bool) -> None:
+    print("Ygg retrieve\n")
+    print(f"query: {payload['query']}")
+    print(f"strategy: {payload['strategy']}")
+    print(f"records: {payload['recordCount']}")
+    print("")
+    for idx, row in enumerate(payload.get("results") or [], start=1):
+        record = row["record"]
+        print(f"{idx}. {record['id']} [{record['kind']}] score={row['score']:.3f}")
+        print(f"   {record['title']}")
+        if record.get("summary"):
+            print(f"   {record['summary']}")
+        print(f"   source: {record['sourcePath']}")
+        if explain:
+            print(f"   explain: {json.dumps(row['explanation'], ensure_ascii=False, sort_keys=True)}")
+
+
+def cmd_retrieve(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    try:
+        payload = retrieve_continuity(root, args.query, strategy=args.strategy, limit=args.limit)
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+        raise SystemExit(str(exc)) from exc
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_retrieve_text(payload, explain=args.explain)
+    return 0
+
+
+def _print_benchmark_text(payload: dict[str, object]) -> None:
+    print("Ygg retrieve benchmark\n")
+    print(f"benchmark: {payload['benchmarkPath']}")
+    print(f"records: {payload['recordCount']}")
+    print(f"cases: {payload['caseCount']}")
+    print("")
+    for strategy in ("keyword", "recency", "topology"):
+        row = payload["strategies"][strategy]
+        print(
+            f"- {strategy}: avg={row['averageScore']:.3f} "
+            f"hits={row['hitCount']}/{payload['caseCount']} partial={row['partialHitCount']}"
+        )
+
+
+def cmd_retrieve_benchmark(args: argparse.Namespace) -> int:
+    root = _resolve_registry_root(args.root)
+    benchmark_path = Path(args.benchmark).expanduser().resolve()
+    try:
+        payload = run_benchmark(root, benchmark_path, limit=args.limit)
+    except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+        raise SystemExit(str(exc)) from exc
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    _print_benchmark_text(payload)
     return 0
 
 
@@ -2266,9 +3335,7 @@ def cmd_branch(args: argparse.Namespace) -> int:
     current_state = args.current_state or "Branch created via ygg; awaiting execution details."
     next_action = args.next_action or "Clarify scope and begin execution."
 
-    cmd = [
-        sys.executable,
-        str(RESUME_SCRIPT),
+    cmd = _resume_script_cmd(
         "checkpoint",
         domain,
         task,
@@ -2282,7 +3349,7 @@ def cmd_branch(args: argparse.Namespace) -> int:
         current_state,
         "--next-action",
         next_action,
-    ]
+    )
 
     for item in args.locked or []:
         cmd.extend(["--locked", item])
@@ -2307,13 +3374,13 @@ def cmd_branch(args: argparse.Namespace) -> int:
     rc = _run(cmd)
     if rc != 0:
         return rc
-    return _run([sys.executable, str(RESUME_SCRIPT), "status", domain])
+    return _run(_resume_script_cmd("status", domain))
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
     domain, task = _resolve_target(args.domain, args.task, require_task=False, verb="resume")
 
-    cmd = [sys.executable, str(RESUME_SCRIPT), "open", domain]
+    cmd = _resume_script_cmd("open", domain)
     if task:
         cmd.append(task)
     if args.semantic:
@@ -2400,8 +3467,8 @@ def cmd_promote(args: argparse.Namespace) -> int:
         "finish": bool(args.finish),
     }
 
-    checkpoint_cmd = [sys.executable, str(RESUME_SCRIPT), "checkpoint", domain, task]
-    finish_cmd = [sys.executable, str(RESUME_SCRIPT), "finish", domain, task]
+    checkpoint_cmd = _resume_script_cmd("checkpoint", domain, task)
+    finish_cmd = _resume_script_cmd("finish", domain, task)
     if args.note:
         finish_cmd.extend(["--note", args.note])
 
@@ -2481,8 +3548,37 @@ def build_parser() -> argparse.ArgumentParser:
     nyx_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     nyx_p.set_defaults(func=cmd_nyx)
 
-    work_p = sub.add_parser("work", help="Natural-language front door into the planner-aware work wrapper")
+    work_p = sub.add_parser(
+        "work",
+        help="Natural-language front door: classify the request, show context, and route to the right agent session",
+    )
     work_p.add_argument("request", nargs="*", help="Freeform request text")
+    work_p.add_argument(
+        "--plan-only",
+        "-n",
+        action="store_true",
+        help="Print the routing plan and context snapshot without launching anything",
+    )
+    work_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the full routing + context payload as JSON instead of text",
+    )
+    work_p.add_argument(
+        "--session",
+        default=DEFAULT_SESSION,
+        help=f"Session suffix for auto-dispatched packets (default: {DEFAULT_SESSION})",
+    )
+    work_p.add_argument(
+        "--openclaw-bin",
+        default=DEFAULT_OPENCLAW_BIN,
+        help="OpenClaw binary path for auto-dispatched packets",
+    )
+    work_p.add_argument(
+        "--print-packet",
+        action="store_true",
+        help="When auto-dispatching, print the boot packet instead of launching it",
+    )
     work_p.set_defaults(func=cmd_work)
 
     paths_p = sub.add_parser("paths", help="Show or validate path-contract resolution")
@@ -2503,6 +3599,90 @@ def build_parser() -> argparse.ArgumentParser:
     inventory_p.add_argument("--root", default=str(YGG_HOME), help="Repo root to inventory (default: current Ygg root)")
     inventory_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     inventory_p.set_defaults(func=cmd_inventory)
+
+    frontier_p = sub.add_parser("frontier", help="Inspect or audit the current Sandy Chaos research frontier")
+    frontier_sub = frontier_p.add_subparsers(dest="frontier_cmd", required=True)
+    frontier_list_p = frontier_sub.add_parser("list", help="List known Sandy Chaos frontiers from the Ygg registry")
+    frontier_list_p.add_argument("--sc-root", default=str(Path.home() / "projects" / "sandy-chaos"), help="Sandy Chaos repo root")
+    frontier_list_p.add_argument("--ygg-root", default=str(YGG_HOME), help=f"Ygg root containing the frontier registry (default: {YGG_HOME})")
+    frontier_list_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    frontier_list_p.set_defaults(func=cmd_frontier_list)
+
+    frontier_current_p = frontier_sub.add_parser("current", help="Show the currently selected frontier target or queued Ygg baton")
+    frontier_current_p.add_argument("--sc-root", default=str(Path.home() / "projects" / "sandy-chaos"), help="Sandy Chaos repo root")
+    frontier_current_p.add_argument("--ygg-root", default=str(YGG_HOME), help=f"Ygg root containing the frontier registry (default: {YGG_HOME})")
+    frontier_current_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    frontier_current_p.set_defaults(func=cmd_frontier_current)
+
+    frontier_queue_p = frontier_sub.add_parser("queue", help="Show the synced Ygg frontier queue built from assistant-home task batons")
+    frontier_queue_p.add_argument("--ygg-root", default=str(YGG_HOME), help=f"Ygg root containing the frontier queue (default: {YGG_HOME})")
+    frontier_queue_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    frontier_queue_p.set_defaults(func=cmd_frontier_queue)
+
+    frontier_sync_p = frontier_sub.add_parser("sync", help="Sync the Ygg frontier queue from assistant-home Ygg task batons")
+    frontier_sync_p.add_argument("--workspace", default=str(RUNTIME_PATHS.spine_root), help=f"Assistant-home workspace root (default: {RUNTIME_PATHS.spine_root})")
+    frontier_sync_p.add_argument("--domain", default="ygg-dev", help="Domain whose task batons should seed the queue")
+    frontier_sync_p.add_argument("--ygg-root", default=str(YGG_HOME), help=f"Ygg root containing the frontier queue (default: {YGG_HOME})")
+    frontier_sync_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    frontier_sync_p.set_defaults(func=cmd_frontier_sync)
+    frontier_audit_p = frontier_sub.add_parser("audit", help="Audit the current or named Sandy Chaos frontier")
+    frontier_audit_p.add_argument("target", nargs="?", default="current", help="Target id from the frontier registry (default: current)")
+    frontier_audit_p.add_argument("--sc-root", default=str(Path.home() / "projects" / "sandy-chaos"), help="Sandy Chaos repo root")
+    frontier_audit_p.add_argument("--ygg-root", default=str(YGG_HOME), help=f"Ygg root containing the frontier registry (default: {YGG_HOME})")
+    frontier_audit_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    frontier_audit_p.set_defaults(func=cmd_frontier_audit)
+
+    frontier_open_p = frontier_sub.add_parser("open", help="Open the current or named frontier in the most appropriate continuity posture")
+    frontier_open_p.add_argument("target", nargs="?", default="current", help="Queue id, task id, or registry target id to open (default: current)")
+    frontier_open_p.add_argument("--sc-root", default=str(Path.home() / "projects" / "sandy-chaos"), help="Sandy Chaos repo root")
+    frontier_open_p.add_argument("--workspace", default=str(RUNTIME_PATHS.spine_root), help=f"Assistant-home workspace root for queue sync (default: {RUNTIME_PATHS.spine_root})")
+    frontier_open_p.add_argument("--domain", default="ygg-dev", help="Domain whose task batons should seed the queue before opening")
+    frontier_open_p.add_argument("--ygg-root", default=str(YGG_HOME), help=f"Ygg root containing the frontier registry/queue (default: {YGG_HOME})")
+    frontier_open_p.add_argument("--openclaw-bin", default="openclaw", help="OpenClaw binary to use when launching planner/resume")
+    frontier_open_p.add_argument("--session", default="planner--main", help="Planner session suffix when frontier open falls back to root mode")
+    frontier_open_p.add_argument("--print-only", action="store_true", help="Print the chosen frontier-entry decision instead of launching it")
+    frontier_open_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    frontier_open_p.set_defaults(func=cmd_frontier_open)
+
+    program_p = sub.add_parser("program", help="Inspect the semantic program registry")
+    program_sub = program_p.add_subparsers(dest="program_cmd", required=True)
+    program_list_p = program_sub.add_parser("list", help="List known programs from state/ygg/programs.json")
+    program_list_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/programs.json (default: current Ygg root)")
+    program_list_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    program_list_p.set_defaults(func=cmd_program_list)
+    program_show_p = program_sub.add_parser("show", help="Show one program by id")
+    program_show_p.add_argument("program_id", help="Program id")
+    program_show_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/programs.json (default: current Ygg root)")
+    program_show_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    program_show_p.set_defaults(func=cmd_program_show)
+
+    idea_p = sub.add_parser("idea", help="Inspect the semantic idea registry")
+    idea_sub = idea_p.add_subparsers(dest="idea_cmd", required=True)
+    idea_list_p = idea_sub.add_parser("list", help="List known ideas from state/ygg/ideas.json")
+    idea_list_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/ideas.json (default: current Ygg root)")
+    idea_list_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    idea_list_p.set_defaults(func=cmd_idea_list)
+    idea_show_p = idea_sub.add_parser("show", help="Show one idea by id")
+    idea_show_p.add_argument("idea_id", help="Idea id")
+    idea_show_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing state/ygg/ideas.json (default: current Ygg root)")
+    idea_show_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    idea_show_p.set_defaults(func=cmd_idea_show)
+
+    retrieve_p = sub.add_parser("retrieve", help="Query normalized continuity state")
+    retrieve_p.add_argument("query", help="Freeform continuity query")
+    retrieve_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing continuity state (default: current Ygg root)")
+    retrieve_p.add_argument("--strategy", choices=["keyword", "recency", "topology"], default="topology", help="Retrieval strategy (default: topology)")
+    retrieve_p.add_argument("--limit", type=int, default=5, help="Max results to return (default: 5)")
+    retrieve_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    retrieve_p.add_argument("--explain", action="store_true", help="Include score explanations in text output")
+    retrieve_p.set_defaults(func=cmd_retrieve)
+
+    retrieve_benchmark_p = sub.add_parser("retrieve-benchmark", help="Run the continuity retrieval benchmark")
+    retrieve_benchmark_p.add_argument("--root", default=str(YGG_HOME), help="Repo root containing continuity state (default: current Ygg root)")
+    retrieve_benchmark_p.add_argument("--benchmark", default=str(YGG_HOME / "state" / "ygg" / "benchmarks" / "continuity-retrieval-benchmark.json"), help="Benchmark JSON file")
+    retrieve_benchmark_p.add_argument("--limit", type=int, default=5, help="Max ranked ids to evaluate per case (default: 5)")
+    retrieve_benchmark_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    retrieve_benchmark_p.set_defaults(func=cmd_retrieve_benchmark)
 
     heimdall_p = sub.add_parser("heimdall", help="Refresh Ygg-owned runtime embodiment state")
     heimdall_p.add_argument("--workspace", default=str(YGG_HOME), help="Workspace root (default: Ygg root)")

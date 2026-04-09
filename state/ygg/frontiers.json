@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-07T09:05:00-04:00",
+  "defaultTarget": "frontier:symbolic-maps-discriminating-benchmark",
+  "frontiers": [
+    {
+      "target": {
+        "kind": "frontier",
+        "id": "frontier:symbolic-maps-discriminating-benchmark",
+        "title": "Symbolic Maps Level-4 discriminating benchmark",
+        "status": "active",
+        "claimTier": "plausible-but-unproven",
+        "ownerSurface": "sandy-chaos",
+        "authoritativeSource": "plans/symbolic_maps_level4_benchmark_v0.md"
+      },
+      "summary": {
+        "objective": "Pressure SC-CONCEPT-0006 with a discriminating benchmark that tests whether invariant-guided symbolic-map extraction beats a looser symbolic-description baseline.",
+        "whyNow": "The active-frontier compression pass selected symbolic maps / narrative invariants as the next proof-bearing move after establishing the proof-path ladder.",
+        "loadBearing": true,
+        "auditVerdict": "mixed",
+        "operatorReading": "The frontier is well chosen and better framed than before, but it is still under-evidenced until the benchmark is actually run and scored."
+      },
+      "foundations": {
+        "mathematical": [
+          {
+            "name": "Structured representation and scoring over repeated artifacts",
+            "status": "implicit",
+            "role": "formalism-choice",
+            "source": "plans/symbolic_maps_level4_benchmark_v0.md",
+            "notes": "The benchmark assumes a stable structured extraction can be compared and scored, but the extraction structure is only described narratively rather than frozen as a formal schema."
+          },
+          {
+            "name": "Comparative benchmark rubric over small bounded artifact set",
+            "status": "explicit",
+            "role": "dependency",
+            "source": "plans/symbolic_maps_level4_benchmark_v0.md",
+            "notes": "The 0-2 scoring rubric is stated, but no formal validation or inter-rater procedure exists yet."
+          }
+        ],
+        "physical": [
+          {
+            "name": "None directly load-bearing for this frontier",
+            "status": "explicit",
+            "role": "constraint",
+            "source": "plans/symbolic_maps_level4_benchmark_v0.md",
+            "notes": "This frontier is currently interpretive/representation-focused rather than physics-bearing. Its legitimacy depends more on benchmark discipline than on physical postulates."
+          }
+        ],
+        "modeling": [
+          {
+            "name": "Narrative invariants are a reusable internal substrate beneath symbolic maps",
+            "status": "explicit",
+            "role": "sc-choice",
+            "source": "spine/concepts/SC-CONCEPT-0006.yaml",
+            "notes": "This is the core Sandy Chaos modeling claim being pressured."
+          },
+          {
+            "name": "Proof-path ladder should govern current research pressure",
+            "status": "explicit",
+            "role": "operationalization",
+            "source": "spine/concepts/SC-CONCEPT-0008.yaml",
+            "notes": "This governance layer is the reason this frontier exists now instead of lateral drift continuing."
+          },
+          {
+            "name": "A three-artifact manual-first benchmark is enough for first discrimination pressure",
+            "status": "explicit",
+            "role": "heuristic",
+            "source": "plans/symbolic_maps_level4_benchmark_v0.md",
+            "notes": "Reasonable for v0, but still a modeling choice rather than a validated benchmark regime."
+          }
+        ]
+      },
+      "gaps": {
+        "missingAssumptions": [
+          "No frozen extraction template or schema artifact exists yet for Arm A.",
+          "No explicit inter-operator agreement assumption is tested in v0."
+        ],
+        "missingNullModels": [
+          "A stronger alternative baseline beyond good-faith loose symbolic description is not yet specified."
+        ],
+        "missingBenchmarks": [
+          "The benchmark has been specified but not yet executed on the three-artifact set.",
+          "No follow-on replication or broader corpus benchmark is defined yet."
+        ],
+        "missingArtifacts": [
+          "Frozen extraction template for invariant-guided Arm A.",
+          "Result note comparing both arms across all three artifacts.",
+          "Pressure/update artifact reflecting benchmark outcome back into SC-CONCEPT-0006."
+        ],
+        "ambiguities": [
+          "Artifact 3 selection rule exists, but the third artifact is not finalized in the benchmark spec."
+        ],
+        "contradictionRisks": [
+          "The concept is described as validated-partial while its main discriminating benchmark is still pending, so wording may overstate current evidence if not handled carefully."
+        ],
+        "blockingGaps": [
+          "Without the actual benchmark run, SC-CONCEPT-0006 remains mostly a Level-3 artifact family rather than a Level-4 discriminating result."
+        ]
+      },
+      "dependencies": {
+        "upstream": [
+          {
+            "kind": "concept",
+            "id": "SC-CONCEPT-0006",
+            "role": "required",
+            "status": "partial"
+          },
+          {
+            "kind": "concept",
+            "id": "SC-CONCEPT-0008",
+            "role": "governance",
+            "status": "healthy"
+          },
+          {
+            "kind": "doc",
+            "id": "docs/proof-path-ladder.md",
+            "role": "governance",
+            "status": "healthy"
+          },
+          {
+            "kind": "doc",
+            "id": "plans/today_frontier_2026-04-06.md",
+            "role": "supporting",
+            "status": "healthy"
+          }
+        ],
+        "downstream": [
+          {
+            "kind": "artifact",
+            "id": "symbolic-maps benchmark result note",
+            "role": "feeds",
+            "status": "planned"
+          },
+          {
+            "kind": "concept",
+            "id": "SC-CONCEPT-0006",
+            "role": "promotes-into",
+            "status": "active"
+          }
+        ]
+      },
+      "promotion": {
+        "readiness": "evidence-needed",
+        "dispositionHint": "TODO_PROMOTE",
+        "why": "The frontier is correctly chosen and specified, but benchmark execution artifacts do not yet exist."
+      },
+      "nextMove": {
+        "type": "define-foundation",
+        "action": "Freeze the Arm A extraction template, choose artifact 3, then run both benchmark arms across all three artifacts.",
+        "why": "That is the smallest move that turns the current frontier from a good specification into a real discriminating test.",
+        "expectedGain": "Moves SC-CONCEPT-0006 from artifact-heavy plausibility toward actual Level-4 benchmark pressure."
+      },
+      "handoff": {
+        "mode": "resume",
+        "domain": "ygg-dev",
+        "task": "sandy-chaos-proof-frontier-v1",
+        "why": "Assistant-home continuity state already has the active Sandy Chaos proof-frontier baton, and its next action matches this frontier.",
+        "request": "Resume the Sandy Chaos proof-frontier lane and continue by defining the symbolic-maps Level-4 discriminating benchmark for SC-CONCEPT-0006."
+      },
+      "evidencePlan": {
+        "docs": [
+          "plans/symbolic_maps_level4_benchmark_v0.md",
+          "plans/today_frontier_2026-04-06.md",
+          "docs/proof-path-ladder.md",
+          "spine/concepts/SC-CONCEPT-0006.yaml",
+          "spine/concepts/SC-CONCEPT-0008.yaml"
+        ],
+        "artifacts": [
+          "plans/symbolic_maps_level4_benchmark_v0.md",
+          "plans/symbolic_maps_level4/comparison_note_v0.md",
+          "tests/test_narrative_invariants.py",
+          "nfem_suite/intelligence/narrative_invariants/symbolic_maps.py"
+        ],
+        "tests": [
+          "tests/test_narrative_invariants.py"
+        ],
+        "benchmarks": [
+          "plans/symbolic_maps_level4_benchmark_v0.md"
+        ],
+        "spineConcepts": [
+          "SC-CONCEPT-0006",
+          "SC-CONCEPT-0008"
+        ],
+        "pressureEvents": [
+          "SC-PRESSURE-20260406-01"
+        ],
+        "pressureEventPaths": [
+          "spine/pressure/2026-04-06/SC-PRESSURE-20260406-01.yaml"
+        ],
+        "benchmarkResultCandidates": [
+          "plans/symbolic_maps_level4/result_note_v0.md",
+          "plans/symbolic_maps_level4/results_v0.md",
+          "memory/research/symbolic_maps_level4_benchmark_v0.md"
+        ]
+      }
+    }
+  ]
+}

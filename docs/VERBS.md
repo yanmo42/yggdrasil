@@ -97,6 +97,97 @@ ygg explain promote --json
 
 ---
 
+## `ygg frontier`
+
+### Purpose
+Audit the current Sandy Chaos research frontier so Ygg can expose foundations, evidence, proof debt, and the best next move.
+
+### v0 prototype behavior
+- supports:
+  - `ygg frontier list`
+  - `ygg frontier current`
+  - `ygg frontier queue`
+  - `ygg frontier sync`
+  - `ygg frontier audit`
+  - `ygg frontier open`
+  - `ygg frontier audit --json`
+- reads Sandy Chaos source surfaces in a read-only way
+- resolves targets through the explicit registry at `state/ygg/frontiers.json`
+- `ygg frontier sync` builds a queue of Ygg frontier candidates from assistant-home `state/resume/tasks/ygg-dev--*.md` batons.
+- `ygg frontier queue` shows the synced queue, with one active frontier and the rest held as ready/waiting/blocked/done.
+- `ygg frontier open` now prefers the queued active/ready Ygg frontier before falling back to the Sandy Chaos registry handoff path.
+- first target in that registry is the current symbolic-maps discriminating-benchmark frontier
+
+### Use when
+- you want one compact readout of frontier rigor rather than only continuity state
+- you need a source-explicit view of assumptions, evidence, missing nulls, and next move
+- you want Ygg to help Sandy Chaos become more scientifically legible
+
+### Example
+```bash
+ygg frontier list
+ygg frontier current
+ygg frontier queue
+ygg frontier sync
+ygg frontier audit
+ygg frontier open
+ygg frontier audit --json
+```
+
+---
+
+## `ygg program`
+
+### Purpose
+Inspect the canonical semantic program registry.
+
+### v1 behavior
+- supports:
+  - `ygg program list`
+  - `ygg program list --json`
+  - `ygg program show <id>`
+  - `ygg program show <id> --json`
+- reads `state/ygg/programs.json`
+- does not mutate registry state
+
+### Use when
+- you want the durable work inventory in CLI form
+- you need one exact program record by id
+
+### Example
+```bash
+ygg program list
+ygg program show ygg-continuity-integration
+```
+
+---
+
+## `ygg idea`
+
+### Purpose
+Inspect the canonical semantic idea registry.
+
+### v1 behavior
+- supports:
+  - `ygg idea list`
+  - `ygg idea list --json`
+  - `ygg idea show <id>`
+  - `ygg idea show <id> --json`
+- reads `state/ygg/ideas.json`
+- does not mutate registry state
+
+### Use when
+- you want the incubating concept inventory in CLI form
+- you need one exact idea record by id
+
+### Example
+```bash
+ygg idea list
+ygg idea show topology-aware-continuity-retrieval
+```
+
+---
+
 ## `ygg suggest`
 
 ### Purpose

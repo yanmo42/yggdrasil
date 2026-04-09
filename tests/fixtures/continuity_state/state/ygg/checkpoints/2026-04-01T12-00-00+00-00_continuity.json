@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-04-01T12:00:00+00:00",
+  "lane": "continuity",
+  "summary": "Checkpointed continuity integration work and linked the retrieval benchmark plan.",
+  "disposition": "LOG_ONLY",
+  "promotion_target": "",
+  "evidence": "Continuity adapter draft and benchmark notes.",
+  "next_action": "Wire retrieval benchmarking into the CLI."
+}

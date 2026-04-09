@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-04-02T09:30:00+00:00",
+  "lane": "topological-memory",
+  "summary": "Ratified topology-aware retrieval as the next bounded continuity direction.",
+  "disposition": "TODO_PROMOTE",
+  "promotion_target": "docs/archive/topological-memory-v1.md",
+  "evidence": "Idea/program linkage and benchmark-first framing.",
+  "next_action": "Build topology scoring and compare it against baselines."
+}
