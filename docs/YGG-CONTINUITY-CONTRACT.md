@@ -36,7 +36,11 @@ What workflows should **target by default** unless contradicted:
 
 ## Courier split
 
-- **Heimdall** detects meaningful runtime/embodiment changes.
-- **Ratatoskr** routes structured continuity events into daily notes and promotion-candidate surfaces.
+- **Heimdall** detects meaningful runtime/embodiment changes. Code is `ygg-canonical`; its runtime outputs (`state/runtime/ygg-self.json`, `event-queue.jsonl`) are `assistant-local` machine state.
+- **Ratatoskr** routes structured continuity events into daily notes and promotion-candidate surfaces. It is a `bridge`: it carries events across the ownership boundary without claiming the destination as Ygg-canonical.
 
 Observation and routing are intentionally separate concerns.
+
+## Ownership model
+
+This contract describes the continuity split. For the full ownership class model across all Ygg surfaces — including `ygg-canonical`, `ygg-derived`, `assistant-local`, `sc-canonical`, and `bridge` — see `docs/BRIDGE-OWNERSHIP-CONTRACT.md`.

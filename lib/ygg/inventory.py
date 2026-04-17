@@ -37,6 +37,7 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "cli-control-plane",
         "title": "CLI control-plane",
+        "ownershipClass": "ygg-canonical",
         "summary": "Canonical Ygg entrypoint, help/contracts surface, and operator-facing verb topology.",
         "files": ["lib/ygg/cli.py", "lib/ygg/frontier.py", "state/ygg/frontiers.json", "bin/ygg", "commands/README.md", "README.md"],
         "tests": ["tests/test_contracts.py"],
@@ -45,7 +46,8 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "semantic-continuity-kernel",
         "title": "Semantic continuity kernel",
-        "summary": "Checkpoint/promote machinery plus structured programs/ideas registries under state/ygg/.",
+        "ownershipClass": "ygg-canonical",
+        "summary": "Checkpoint/promote machinery plus structured programs/ideas registries under state/ygg/. These files are ygg-canonical: authoritative Ygg control-plane state.",
         "files": [
             "lib/ygg/continuity.py",
             "state/ygg/checkpoints",
@@ -58,7 +60,8 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "runtime-embodiment-refresh",
         "title": "Runtime embodiment refresh",
-        "summary": "Heimdall runtime snapshot, fingerprinting, kernel event emission, and daily note handoff.",
+        "ownershipClass": "ygg-canonical",
+        "summary": "Heimdall runtime snapshot, fingerprinting, kernel event emission, and daily note handoff. Code is ygg-canonical; runtime outputs (state/runtime/ygg-self.json, event-queue.jsonl) are assistant-local machine state.",
         "files": ["lib/ygg/heimdall.py", "state/templates/ygg-self.example.json"],
         "tests": ["tests/test_heimdall.py"],
         "commands": ["heimdall"],
@@ -66,7 +69,8 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "event-routing-courier",
         "title": "Event routing courier",
-        "summary": "Ratatoskr event routing into daily notes and promotion-candidate sinks.",
+        "ownershipClass": "bridge",
+        "summary": "Ratatoskr event routing into daily notes and promotion-candidate sinks. This system is a bridge: it carries ygg-canonical events into assistant-local note surfaces without erasing provenance.",
         "files": ["lib/ygg/ratatoskr.py", "state/runtime/promotions.jsonl", "state/notes/promotions.md"],
         "tests": ["tests/test_ratatoskr.py"],
         "commands": ["ratatoskr"],
@@ -74,6 +78,7 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "bootstrap-and-path-contract",
         "title": "Bootstrap and path contract",
+        "ownershipClass": "ygg-canonical",
         "summary": "Portable path resolution, registry/profile loading, and Arch-first bootstrap inspection.",
         "files": [
             "lib/ygg/path_contract.py",
@@ -91,7 +96,8 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "ravens-governed-roaming",
         "title": "RAVENS governed roaming cognition",
-        "summary": "Inspectable flights, return packets, and graft/beak proposal artifacts.",
+        "ownershipClass": "ygg-canonical",
+        "summary": "Inspectable flights, return packets, and graft/beak proposal artifacts. Flight outputs are ygg-derived: reproducible from the canonical flight records.",
         "files": ["lib/ygg/ravens_v1.py", "docs/RAVENS.md", "docs/RAVENS-V1.md"],
         "tests": ["tests/test_ravens.py"],
         "commands": ["raven", "graft", "beak"],
@@ -99,7 +105,8 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "state-boundary-and-backups",
         "title": "State boundary and backups",
-        "summary": "Commit-safe templates/policy plus local backup/restore scripts for runtime surfaces.",
+        "ownershipClass": "ygg-canonical",
+        "summary": "Commit-safe templates/policy plus local backup/restore scripts for runtime surfaces. See docs/BRIDGE-OWNERSHIP-CONTRACT.md for the full ownership class model.",
         "files": [
             "state/README.md",
             "state/policy/STATE-BOUNDARY.md",
@@ -472,27 +479,33 @@ def _bridge_rows(root: Path) -> list[dict[str, Any]]:
     for path in sorted(links_dir.iterdir(), key=lambda item: item.name):
         if path.name == "README.md":
             continue
-        rows.append(_path_row(path, root, reason="Explicit bridge into assistant-home / spine-owned surface."))
+        row = _path_row(path, root, reason="Explicit bridge into assistant-home / spine-owned surface. Ownership class: bridge.")
+        row["ownershipClass"] = "bridge"
+        rows.append(row)
     return rows
 
 
 def _state_surface_rows(root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    # Each entry: (relative_path, reason, ownershipClass)
+    # See docs/BRIDGE-OWNERSHIP-CONTRACT.md for class definitions.
     candidates = (
-        ("state/ygg/programs.json", "Program registry seed for semantic continuity."),
-        ("state/ygg/ideas.json", "Idea registry seed for incubation and promotion."),
-        ("state/ygg/checkpoints", "Checkpoint ledger for semantic continuity decisions."),
-        ("state/runtime/persona-mode.json", "Persisted persona override runtime state."),
-        ("state/runtime/promotions.jsonl", "Promotion/event log for branch outcomes."),
-        ("state/runtime/ygg-self.json", "Live runtime embodiment snapshot emitted by Heimdall."),
-        ("state/runtime/ygg-kernel.json", "Kernel boot/runtime state surface."),
-        ("state/runtime/event-queue.jsonl", "Append-only canonical event queue."),
-        ("state/runtime/promotion-candidates.jsonl", "Promotion candidates queued for review."),
+        ("state/ygg/programs.json", "Program registry seed for semantic continuity.", "ygg-canonical"),
+        ("state/ygg/ideas.json", "Idea registry seed for incubation and promotion.", "ygg-canonical"),
+        ("state/ygg/checkpoints", "Checkpoint ledger for semantic continuity decisions.", "ygg-canonical"),
+        ("state/runtime/persona-mode.json", "Persisted persona override runtime state.", "assistant-local"),
+        ("state/runtime/promotions.jsonl", "Promotion/event log for branch outcomes.", "ygg-derived"),
+        ("state/runtime/ygg-self.json", "Live runtime embodiment snapshot emitted by Heimdall; machine-specific, not portable repo truth.", "assistant-local"),
+        ("state/runtime/ygg-kernel.json", "Kernel boot/runtime state surface; machine-specific.", "assistant-local"),
+        ("state/runtime/event-queue.jsonl", "Append-only event queue derived from runtime observations.", "ygg-derived"),
+        ("state/runtime/promotion-candidates.jsonl", "Promotion candidates queued for review; derived from branch outcomes.", "ygg-derived"),
     )
-    for relative, reason in candidates:
+    for relative, reason, ownership_class in candidates:
         path = root / relative
         if path.exists():
-            rows.append(_path_row(path, root, reason=reason))
+            row = _path_row(path, root, reason=reason)
+            row["ownershipClass"] = ownership_class
+            rows.append(row)
     return rows
 
 
@@ -515,6 +528,7 @@ def _repo_system_rows(root: Path) -> list[dict[str, Any]]:
             {
                 "id": spec["id"],
                 "title": spec["title"],
+                "ownershipClass": spec.get("ownershipClass", "ygg-canonical"),
                 "status": status,
                 "summary": spec["summary"],
                 "commands": list(spec.get("commands") or []),
@@ -613,10 +627,12 @@ def build_repo_inventory(root: str | Path) -> dict[str, Any]:
         "testCount": len(list((root_path / "tests").glob("test_*.py"))) if (root_path / "tests").exists() else 0,
     }
 
+    ownership_contract = root_path / "docs" / "BRIDGE-OWNERSHIP-CONTRACT.md"
     return {
         "schema": "ygg-repo-inventory/v1",
         "generatedAt": datetime.now(UTC).isoformat(),
         "root": str(root_path),
+        "ownershipContract": str(ownership_contract) if ownership_contract.exists() else None,
         "summary": summary,
         "commandSurface": list(REPO_COMMAND_SURFACE),
         "systems": systems,

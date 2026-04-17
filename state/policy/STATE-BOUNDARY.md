@@ -23,3 +23,12 @@ This folder is intentionally ignored by git.
 ## Principle
 Code + machine setup are portable.
 Live state is recoverable via controlled backup/restore, not by committing secrets.
+
+## Ownership classes
+
+State surfaces map to the following ownership classes (see `docs/BRIDGE-OWNERSHIP-CONTRACT.md`):
+
+- `state/ygg/` — `ygg-canonical`: authoritative Ygg control-plane truth; commit-safe
+- `state/templates/`, `state/policy/`, `state/scripts/` — `ygg-canonical`: commit-safe
+- `state/runtime/` — `assistant-local` or `ygg-derived`: machine-specific; do not commit
+- `state/notes/` — `assistant-local`: runtime note sinks; do not commit raw session output

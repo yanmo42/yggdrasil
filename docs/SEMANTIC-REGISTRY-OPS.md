@@ -2,11 +2,13 @@
 
 This document defines the intended command surface for mutating Ygg semantic registry state.
 
-Authoritative files:
+Authoritative files (**ownership class: `ygg-canonical`**):
 - `state/ygg/programs.json`
 - `state/ygg/ideas.json`
 
-These are semantic registry state, not chat memory and not runtime-only event logs.
+These are ygg-canonical: authoritative Ygg control-plane truth, not chat memory and not
+runtime-only event logs. They may be mutated only by commands that explicitly declare writes.
+See `docs/BRIDGE-OWNERSHIP-CONTRACT.md` for the full ownership class model.
 
 ## Design rules
 

@@ -2,6 +2,11 @@
 
 If Heimdall sees, Ratatoskr carries.
 
+**Ownership class: `bridge`**
+Ratatoskr is a bridge surface. It carries ygg-canonical events into assistant-local note sinks
+without claiming ownership of those sinks. It does not mutate ygg-canonical state.
+See `docs/BRIDGE-OWNERSHIP-CONTRACT.md` for the full ownership class model.
+
 ## Role
 
 Ratatoskr routes small structured continuity events to:
