@@ -456,12 +456,21 @@ VERB_CONTRACTS = {
             "future mode qualifiers",
         ],
         "writes": ["delegated to workspace work wrapper / planner session"],
-        "calls": ["scripts/work.py"],
-        "guarantees": [
-            "currently forwards arguments verbatim to the workspace work wrapper",
-            "target shape is a default human front door with deterministic continuity resolution under a soft NLP layer",
+        "calls": [
+            "work_resolver.resolve_continuity_brief",
+            "continuity_retrieval.retrieve_continuity",
+            "semantic_registry.list_registry_items",
+            "continuity.load_latest_checkpoint",
+            "scripts/work.py",
         ],
-        "fails_when": ["workspace work script is missing or exits non-zero"],
+        "guarantees": [
+            "assembles a continuity brief from checkpoint, program, and idea state before dispatch",
+            "emits continuityBrief in JSON payload and as a human-readable header in text mode",
+            "dispatch recommendation is informed by brief confidence and checkpoint disposition",
+            "degrades gracefully if registry or checkpoint state is missing",
+            "no-request path preserves legacy passthrough behavior exactly",
+        ],
+        "fails_when": ["workspace work script is missing or exits non-zero (passthrough path only)"],
     },
     "paths": {
         "mutates_state": False,
@@ -2117,6 +2126,7 @@ def _build_work_payload(
     context: dict[str, object],
     dispatch: dict[str, object],
     context_boost: str | None,
+    continuity_brief: dict[str, object] | None = None,
 ) -> dict[str, object]:
     return {
         "request": request,
@@ -2130,11 +2140,53 @@ def _build_work_payload(
         },
         "context_boost": context_boost,
         "dispatch": dispatch,
+        "continuityBrief": continuity_brief,
         "context": context,
     }
 
 
+def _print_continuity_brief_header(brief: dict[str, object]) -> None:
+    """Print a compact continuity brief block above the work plan."""
+    status = brief.get("status", "empty")
+    confidence = brief.get("confidence", 0.0)
+    print(f"── continuity brief ──  status: {status}  confidence: {confidence:.2f}")
+
+    cp = brief.get("latestCheckpoint")
+    if cp:
+        lane = cp.get("lane", "?")
+        disposition = cp.get("disposition", "")
+        summary = cp.get("summary", "")
+        print(f"  checkpoint: [{lane}] {disposition} — {summary}")
+        if cp.get("nextAction"):
+            print(f"    → {cp['nextAction']}")
+
+    prog = brief.get("activeProgram")
+    if prog:
+        title = prog.get("title", "?")
+        priority = prog.get("priority", "")
+        next_action = prog.get("nextAction", "")
+        tag = f" ({priority})" if priority else ""
+        print(f"  program:    {title}{tag}")
+        if next_action:
+            print(f"    → {next_action}")
+
+    anchor = brief.get("matchedAnchor")
+    if anchor:
+        print(f"  matched:    [{anchor.get('kind')}] {anchor.get('title', '')} — {anchor.get('summary', '')[:80]}")
+
+    suggested = brief.get("suggestedDispatch", "")
+    reason = brief.get("dispatchReason", "")
+    if suggested:
+        print(f"  suggests:   {suggested}  ({reason})")
+
+    print()
+
+
 def _print_work_plan(payload: dict[str, object]) -> None:
+    brief = payload.get("continuityBrief")
+    if brief:
+        _print_continuity_brief_header(brief)
+
     print("Ygg work\n")
     request = payload["request"]
     route = payload["route"]
@@ -2244,13 +2296,38 @@ def cmd_work(args: argparse.Namespace) -> int:
     context = _gather_work_context(tasks)
     route, context_boost = _boost_route_with_context(route, context, request)
 
+    # Assemble continuity brief from ygg-canonical state (degrades silently).
+    brief: dict[str, object] | None = None
+    try:
+        from ygg.work_resolver import resolve_continuity_brief
+        brief = resolve_continuity_brief(YGG_HOME, request, context=context)
+    except Exception:
+        pass
+
     dispatch = _decide_work_dispatch(request, route)
+
+    # If the NL router falls back to passthrough but the brief has high-confidence
+    # resume signal, note it in the dispatch explanation (execution stays passthrough
+    # since we don't have a full domain/task from the router to build a packet).
+    if (
+        dispatch["kind"] == "planner-passthrough"
+        and brief is not None
+        and brief.get("suggestedDispatch") == "resume"
+        and float(brief.get("confidence") or 0) >= 0.7
+    ):
+        cp = brief.get("latestCheckpoint") or {}
+        lane = cp.get("lane", "")
+        hint = f" Brief suggests resuming lane '{lane}' (confidence {brief['confidence']:.2f})." if lane else ""
+        dispatch = dict(dispatch)
+        dispatch["explanation"] = dispatch.get("explanation", "") + hint
+
     payload = _build_work_payload(
         request=request,
         route=route,
         context=context,
         dispatch=dispatch,
         context_boost=context_boost,
+        continuity_brief=brief,
     )
 
     if args.json:
