@@ -11,6 +11,7 @@ state/notes/
 
 # Local secret/env overlays
 *.env
+!state/profiles/bootstrap-profile.*.env
 *.local
 *.key
 *.pem

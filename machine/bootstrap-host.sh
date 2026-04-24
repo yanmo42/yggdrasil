@@ -290,6 +290,8 @@ install_base_packages() {
   local manifest_line
 
   IFS=':' read -r -a manifests <<< "$PACMAN_PACKAGE_MANIFESTS"
+  manifest_line="$(printf '%s ' "${manifests[@]}")"
+  log "package manifests: $(trim "$manifest_line")"
 
   case "$mgr" in
     pacman)
@@ -297,8 +299,6 @@ install_base_packages() {
       if [[ "${#packages[@]}" -eq 0 ]]; then
         packages=("${DEFAULT_PACMAN_PACKAGES[@]}")
       fi
-      manifest_line="$(printf '%s ' "${manifests[@]}")"
-      log "pacman manifests: $(trim "$manifest_line")"
       run_cmd sudo pacman -Syu --needed "${packages[@]}"
       ;;
     apt)

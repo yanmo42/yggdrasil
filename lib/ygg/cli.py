@@ -56,7 +56,11 @@ from ygg.ravens_v1 import (
     record_aviary_exchange,
     record_probe,
 )
-from ygg.ratatoskr import main as ratatoskr_main
+from ygg.ratatoskr import (
+    DEFAULT_DAILY_DIR as RATATOSKR_DEFAULT_DAILY_DIR,
+    DEFAULT_PROMOTION_FILE as RATATOSKR_DEFAULT_PROMOTION_FILE,
+    main as ratatoskr_main,
+)
 from ygg.semantic_registry import (
     SemanticRegistryValidationError,
     create_registry_item,
@@ -923,7 +927,7 @@ VERB_CONTRACTS = {
         "optional": ["--workspace", "--daily-dir", "--promotion-file", "--dry-run", "--show-event"],
         "writes": [
             "~/ygg/state/notes/daily/*.md",
-            "~/ygg/state/notes/promotion-candidates.md",
+            "~/ygg/state/runtime/promotion-candidates.jsonl",
         ],
         "calls": ["ratatoskr.route_event"],
         "guarantees": [
@@ -4073,8 +4077,8 @@ def build_parser() -> argparse.ArgumentParser:
     ratatoskr_p.add_argument("--workspace", default=str(YGG_HOME), help="Workspace root (default: Ygg root)")
     ratatoskr_p.add_argument("--event-json", help="Inline JSON event payload")
     ratatoskr_p.add_argument("--event-file", help="Path to JSON event payload")
-    ratatoskr_p.add_argument("--daily-dir", default="state/notes/daily", help="Daily note directory relative to workspace unless absolute")
-    ratatoskr_p.add_argument("--promotion-file", default="state/notes/promotion-candidates.md", help="Promotion note path relative to workspace unless absolute")
+    ratatoskr_p.add_argument("--daily-dir", default=RATATOSKR_DEFAULT_DAILY_DIR, help="Daily note directory relative to workspace unless absolute")
+    ratatoskr_p.add_argument("--promotion-file", default=RATATOSKR_DEFAULT_PROMOTION_FILE, help="Promotion note path relative to workspace unless absolute")
     ratatoskr_p.add_argument("--dry-run", action="store_true", help="Show routing result without writing")
     ratatoskr_p.add_argument("--show-event", action="store_true", help="Print the event payload instead of the routing result")
     ratatoskr_p.set_defaults(func=cmd_ratatoskr)

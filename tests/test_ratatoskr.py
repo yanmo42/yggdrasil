@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -10,6 +11,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 from ygg.ratatoskr import build_daily_bullets, route_event
+
+YGG_CLI = Path(__file__).resolve().parents[1] / "lib" / "ygg" / "cli.py"
 
 
 class RatatoskrTests(unittest.TestCase):
@@ -97,6 +100,37 @@ class RatatoskrTests(unittest.TestCase):
         self.assertIn("change model: old-model -> new-model", rendered)
         self.assertIn("fingerprint: ff00aa", rendered)
         self.assertIn("sessionKey: agent:claw:main", rendered)
+
+    def test_cli_default_promotion_file_matches_runtime_jsonl_sink(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            event = {
+                "id": "evt_cli_default",
+                "kind": "continuity.note",
+                "source": "test",
+                "summary": "Default sink check",
+                "route": {"daily": False, "promote": True, "notify": False},
+            }
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(YGG_CLI),
+                    "ratatoskr",
+                    "--workspace",
+                    td,
+                    "--event-json",
+                    json.dumps(event),
+                    "--dry-run",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        payload = json.loads(proc.stdout)
+        self.assertEqual(
+            str(Path(td) / "state/runtime/promotion-candidates.jsonl"),
+            payload["promotion"],
+        )
 
 
 if __name__ == "__main__":
