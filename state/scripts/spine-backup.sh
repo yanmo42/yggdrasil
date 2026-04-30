@@ -111,8 +111,8 @@ from pathlib import Path
 ygg_root = Path(sys.argv[1]).expanduser().resolve()
 contract = (sys.argv[2] or "").strip()
 
-sys.path.insert(0, str(ygg_root / "code" / "src"))
-from path_contract import resolve_runtime_paths  # type: ignore
+sys.path.insert(0, str(ygg_root / "lib"))
+from ygg.path_contract import resolve_runtime_paths  # type: ignore
 
 rt = resolve_runtime_paths(contract or None)
 print(rt.spine_root)
