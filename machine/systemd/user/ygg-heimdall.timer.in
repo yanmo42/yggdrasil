@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Ygg Heimdall runtime refresh on a user timer
+Documentation=file://@YGG_ROOT@/docs/RUNNING.md
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=30m
+AccuracySec=1m
+Persistent=true
+Unit=ygg-heimdall.service
+
+[Install]
+WantedBy=timers.target

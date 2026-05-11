@@ -1,0 +1,13 @@
+[Unit]
+Description=Ygg Heimdall runtime refresh
+Documentation=file://@YGG_ROOT@/docs/RUNNING.md
+After=default.target
+ConditionPathExists=@YGG_BIN@
+
+[Service]
+Type=oneshot
+ExecStart=@YGG_BIN@ heimdall --workspace @YGG_ROOT@ --note --ratatoskr
+WorkingDirectory=@YGG_ROOT@
+
+[Install]
+WantedBy=default.target

@@ -17,6 +17,8 @@ DEFAULT_PROJECTS_ROOT="$HOME/projects"
 DEFAULT_SANDY_ROOT="$DEFAULT_PROJECTS_ROOT/sandy-chaos"
 DEFAULT_SITE_ROOT="$DEFAULT_PROJECTS_ROOT/ianmoog-site"
 DEFAULT_BOOTSTRAP_PROFILE="stable"
+INSTALL_SYSTEMD_USER_UNITS=0
+ENABLE_SYSTEMD_USER_TIMERS=0
 DEFAULT_PACMAN_PACKAGES=(
   git
   curl
@@ -72,6 +74,8 @@ Options:
   --skip-install            Skip OS package install phase
   --skip-openclaw-install   Skip OpenClaw install check/install
   --rewrite-path-contract   Overwrite existing ygg-paths.yaml
+  --install-user-units      Install Ygg user-level systemd units into ~/.config/systemd/user
+  --enable-user-timers      Enable installed Ygg user timers (implies --install-user-units)
   --workspace-root PATH     Override workspace root (default: $DEFAULT_WORKSPACE_ROOT)
   --ygg-root PATH           Override ygg root (default: $DEFAULT_YGG_ROOT)
   --tara-root PATH          Override tara root (default: $DEFAULT_TARA_ROOT)
@@ -116,6 +120,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --rewrite-path-contract)
       REWRITE_PATH_CONTRACT=1
+      shift
+      ;;
+    --install-user-units)
+      INSTALL_SYSTEMD_USER_UNITS=1
+      shift
+      ;;
+    --enable-user-timers)
+      INSTALL_SYSTEMD_USER_UNITS=1
+      ENABLE_SYSTEMD_USER_TIMERS=1
       shift
       ;;
     --workspace-root)
@@ -458,6 +471,24 @@ wire_ygg_bin() {
   run_cmd ln -sfn "$ygg_bin" "$HOME/.local/bin/ygg"
 }
 
+install_systemd_user_units() {
+  local installer="$YGG_ROOT/machine/install-systemd-user-units.sh"
+  if [[ ! -x "$installer" ]]; then
+    warn "systemd user-unit installer not found or not executable: $installer"
+    return
+  fi
+
+  local -a args=()
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    args+=(--dry-run)
+  fi
+  if [[ "$ENABLE_SYSTEMD_USER_TIMERS" -eq 1 ]]; then
+    args+=(--enable-timers)
+  fi
+
+  run_cmd "$installer" "${args[@]}"
+}
+
 run_path_checks() {
   local ygg_cli_py="$YGG_ROOT/lib/ygg/cli.py"
 
@@ -508,6 +539,11 @@ main() {
 
   write_path_contract
   wire_ygg_bin
+  if [[ "$INSTALL_SYSTEMD_USER_UNITS" -eq 1 ]]; then
+    install_systemd_user_units
+  else
+    log "skip systemd user-unit install"
+  fi
   run_path_checks
 
   log
@@ -517,6 +553,9 @@ main() {
   log "  2) Run: ygg paths"
   log "  3) Run: ygg status"
   log "  4) Review profile assets under $YGG_ROOT/state/profiles"
+  if [[ "$INSTALL_SYSTEMD_USER_UNITS" -eq 1 ]]; then
+    log "  5) Inspect user units: systemctl --user status ygg-heimdall.timer"
+  fi
 }
 
 main "$@"

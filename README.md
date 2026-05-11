@@ -76,6 +76,7 @@ For the deeper rationale, read:
 - `docs/` — architecture, concepts, usage, and operator docs
 - `tests/` — behavioral and contract validation
 - `machine/` — machine/bootstrap scripts
+- `machine/systemd/user/` — tracked user-level systemd unit templates
 - `state/` — mutable runtime world
 - `links/` — explicit bridges to assistant-home internals
 
@@ -171,6 +172,7 @@ Current verbs:
 - `ygg frontier` (`list`, `current`, `queue`, `sync`, `audit`, `open`)
 - `ygg retrieve`
 - `ygg retrieve-benchmark`
+- `ygg wake`
 - `ygg raven` (`launch`, `status`, `inspect`, `return`, `adjudicate`)
 - `ygg graft` (`propose`)
 - `ygg beak` (`propose`)
@@ -200,6 +202,7 @@ ygg frontier audit
 ygg frontier open --print-only
 ygg retrieve "topology-aware continuity retrieval"
 ygg retrieve-benchmark
+ygg wake --print-only
 ygg heimdall --show-json
 ygg heimdall --note --ratatoskr
 ygg ratatoskr --event-file /tmp/event.json

@@ -17,6 +17,7 @@ Machine-level setup and host bootstrap scripts.
 - clone/pull configured repos,
 - write/update the path contract,
 - wire the `ygg` launcher,
+- install Ygg user-level systemd units,
 - run `ygg paths check`.
 
 `inventory-host.py` emits a JSON host inventory to support kernelization and portability planning.
@@ -34,4 +35,14 @@ Examples:
 ~/ygg/machine/bootstrap-host.sh --profile stable
 ~/ygg/machine/bootstrap-host.sh --profile dev
 ~/ygg/machine/bootstrap-host.sh --dry-run --profile dev
+~/ygg/machine/bootstrap-host.sh --profile stable --install-user-units
+~/ygg/machine/bootstrap-host.sh --profile stable --enable-user-timers
+```
+
+Tracked user-unit templates live under `machine/systemd/user/`.
+Install them directly with:
+
+```bash
+~/ygg/machine/install-systemd-user-units.sh
+~/ygg/machine/install-systemd-user-units.sh --enable-timers
 ```

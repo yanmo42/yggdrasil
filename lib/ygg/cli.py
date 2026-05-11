@@ -148,6 +148,20 @@ EXPLAIN_CARDS = {
         ],
         "next": ["suggest", "root", "status"],
     },
+    "wake": {
+        "purpose": "Run the restart-safe continuity wake ritual that refreshes OpenClaw status, Ygg embodiment state, frontier context, and repo truth in one pass.",
+        "when_to_use": [
+            "Right after a machine reboot or OpenClaw restart.",
+            "When you want one canonical morning re-entry command instead of manually replaying the wake sequence.",
+            "When you want Ygg to depend explicitly on both OpenClaw runtime health and frontier continuity.",
+        ],
+        "examples": [
+            "ygg wake",
+            "ygg wake --print-only",
+            "ygg wake --json",
+        ],
+        "next": ["frontier", "work", "status"],
+    },
     "paths": {
         "purpose": "Inspect or validate path-contract resolution for Ygg/OpenClaw roots.",
         "when_to_use": [
@@ -449,6 +463,32 @@ VERB_CONTRACTS = {
         "fails_when": [
             "request is empty",
             "workspace planner/router imports are unavailable",
+        ],
+    },
+    "wake": {
+        "mutates_state": "indirect",
+        "requires": [],
+        "optional": ["--workspace", "--ygg-root", "--sc-root", "--domain", "--session", "--openclaw-bin", "--print-only", "--json"],
+        "writes": [
+            "heimdall continuity state refresh when not in --print-only",
+            "frontier-queue active/opened metadata via frontier open when not in --print-only",
+            "ratatoskr runtime sinks via heimdall --ratatoskr",
+        ],
+        "calls": [
+            "openclaw status",
+            "ygg heimdall --note --ratatoskr",
+            "ygg frontier current",
+            "ygg frontier open",
+            "git status (ygg + sandy-chaos)",
+        ],
+        "guarantees": [
+            "runs the restart-safe continuity wake ritual in a fixed order",
+            "--print-only emits the command plan without executing or mutating state",
+            "--json returns a machine-readable command plan and per-step results",
+        ],
+        "fails_when": [
+            "any subcommand in the ritual exits non-zero in execute mode",
+            "configured workspace/ygg-root/sc-root paths are missing or unreadable",
         ],
     },
     "work": {
@@ -3294,6 +3334,143 @@ def cmd_retrieve_benchmark(args: argparse.Namespace) -> int:
     return 0
 
 
+def _wake_payload(args: argparse.Namespace) -> dict[str, object]:
+    ygg_root = Path(args.ygg_root).expanduser().resolve()
+    sc_root = Path(args.sc_root).expanduser().resolve()
+    workspace = Path(args.workspace).expanduser().resolve()
+    return {
+        "openclawBin": args.openclaw_bin,
+        "yggRoot": str(ygg_root),
+        "workspace": str(workspace),
+        "scRoot": str(sc_root),
+        "commands": [
+            {
+                "label": "openclaw-status",
+                "command": [args.openclaw_bin, "status"],
+            },
+            {
+                "label": "ygg-git-status",
+                "command": ["git", "-C", str(ygg_root), "status", "--short", "--branch"],
+            },
+            {
+                "label": "heimdall-refresh",
+                "command": [
+                    "ygg",
+                    "heimdall",
+                    "--workspace",
+                    str(ygg_root),
+                    "--note",
+                    "--ratatoskr",
+                ],
+            },
+            {
+                "label": "frontier-current",
+                "command": [
+                    "ygg",
+                    "frontier",
+                    "current",
+                    "--sc-root",
+                    str(sc_root),
+                    "--ygg-root",
+                    str(ygg_root),
+                ],
+            },
+            {
+                "label": "frontier-open",
+                "command": [
+                    "ygg",
+                    "frontier",
+                    "open",
+                    "--sc-root",
+                    str(sc_root),
+                    "--workspace",
+                    str(workspace),
+                    "--ygg-root",
+                    str(ygg_root),
+                    "--openclaw-bin",
+                    args.openclaw_bin,
+                ],
+            },
+            {
+                "label": "sandy-git-status",
+                "command": ["git", "-C", str(sc_root), "status", "--short", "--branch"],
+            },
+        ],
+    }
+
+
+def _print_wake_text(payload: dict[str, object]) -> None:
+    print("Ygg wake\n")
+    print("This ritual runs:\n")
+    for row in payload["commands"]:
+        print(f"- {row['label']}: {_render_cmd(row['command'])}")
+
+
+def cmd_wake(args: argparse.Namespace) -> int:
+    payload = _wake_payload(args)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    if args.print_only:
+        _print_wake_text(payload)
+        return 0
+
+    ygg_root = Path(args.ygg_root).expanduser().resolve()
+    sc_root = Path(args.sc_root).expanduser().resolve()
+    workspace = Path(args.workspace).expanduser().resolve()
+
+    print("== OpenClaw status ==")
+    rc = _run([args.openclaw_bin, "status"])
+    if rc != 0:
+        return rc
+
+    print("\n== Ygg repo state ==")
+    rc = _run(["git", "-C", str(ygg_root), "status", "--short", "--branch"])
+    if rc != 0:
+        return rc
+
+    print("\n== Ygg continuity refresh ==")
+    rc = heimdall_main([
+        "--workspace",
+        str(ygg_root),
+        "--note",
+        "--ratatoskr",
+    ])
+    if rc != 0:
+        return rc
+
+    print("\n== Frontier current ==")
+    rc = cmd_frontier_current(
+        argparse.Namespace(
+            sc_root=str(sc_root),
+            ygg_root=str(ygg_root),
+            json=False,
+        )
+    )
+    if rc != 0:
+        return rc
+
+    print("\n== Frontier open ==")
+    rc = cmd_frontier_open(
+        argparse.Namespace(
+            sc_root=str(sc_root),
+            workspace=str(workspace),
+            domain=args.domain,
+            ygg_root=str(ygg_root),
+            openclaw_bin=args.openclaw_bin,
+            session=args.session,
+            print_only=False,
+            json=False,
+            target=None,
+        )
+    )
+    if rc != 0:
+        return rc
+
+    print("\n== Sandy Chaos repo truth ==")
+    return _run(["git", "-C", str(sc_root), "status", "--short", "--branch"])
+
+
 def cmd_heimdall(args: argparse.Namespace) -> int:
     argv = [
         "--workspace",
@@ -4047,6 +4224,17 @@ def build_parser() -> argparse.ArgumentParser:
     retrieve_benchmark_p.add_argument("--limit", type=int, default=5, help="Max ranked ids to evaluate per case (default: 5)")
     retrieve_benchmark_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
     retrieve_benchmark_p.set_defaults(func=cmd_retrieve_benchmark)
+
+    wake_p = sub.add_parser("wake", help="Run the restart-safe continuity wake ritual")
+    wake_p.add_argument("--workspace", default=str(RUNTIME_PATHS.spine_root), help=f"Assistant-home workspace root for frontier queue sync (default: {RUNTIME_PATHS.spine_root})")
+    wake_p.add_argument("--ygg-root", default=str(YGG_HOME), help=f"Ygg root containing continuity state (default: {YGG_HOME})")
+    wake_p.add_argument("--sc-root", default=str(Path.home() / "projects" / "sandy-chaos"), help="Sandy Chaos repo root")
+    wake_p.add_argument("--domain", default="ygg-dev", help="Domain whose task batons should seed the frontier queue before opening")
+    wake_p.add_argument("--session", default=DEFAULT_SESSION, help=f"Planner session suffix when frontier open falls back to root mode (default: {DEFAULT_SESSION})")
+    wake_p.add_argument("--openclaw-bin", default=DEFAULT_OPENCLAW_BIN, help="OpenClaw binary path")
+    wake_p.add_argument("--print-only", action="store_true", help="Print the wake ritual command plan instead of running it")
+    wake_p.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text")
+    wake_p.set_defaults(func=cmd_wake)
 
     heimdall_p = sub.add_parser("heimdall", help="Refresh Ygg-owned runtime embodiment state")
     heimdall_p.add_argument("--workspace", default=str(YGG_HOME), help="Workspace root (default: Ygg root)")

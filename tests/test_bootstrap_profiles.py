@@ -91,6 +91,53 @@ class TestBootstrapProfiles(unittest.TestCase):
             self.assertIn(f"- spine root: {workspace}", proc.stdout)
             self.assertIn(f"- work repos root: {projects}", proc.stdout)
 
+    def test_bootstrap_can_dry_run_user_unit_install(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            workspace = home / "custom-ws"
+            projects = home / "custom-projects"
+            ygg_root = REPO_ROOT
+            tara_root = home / "tara"
+            (workspace / "scripts").mkdir(parents=True, exist_ok=True)
+            (workspace / "scripts" / "work.py").write_text("print('work')\n", encoding="utf-8")
+            (workspace / "scripts" / "resume.py").write_text("print('resume')\n", encoding="utf-8")
+            tara_root.mkdir(parents=True, exist_ok=True)
+
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["ENABLE_SPINE"] = "0"
+            env["ENABLE_YGG"] = "0"
+            env["ENABLE_TARA"] = "0"
+            env["ENABLE_SANDY_CHAOS"] = "0"
+            env["ENABLE_IANMOOG_SITE"] = "0"
+
+            proc = subprocess.run(
+                [
+                    str(BOOTSTRAP),
+                    "--dry-run",
+                    "--skip-install",
+                    "--skip-openclaw-install",
+                    "--profile",
+                    "stable",
+                    "--workspace-root",
+                    str(workspace),
+                    "--projects-root",
+                    str(projects),
+                    "--ygg-root",
+                    str(ygg_root),
+                    "--tara-root",
+                    str(tara_root),
+                    "--enable-user-timers",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            self.assertIn(f"+ {REPO_ROOT / 'machine' / 'install-systemd-user-units.sh'} --dry-run --enable-timers", proc.stdout)
+            self.assertIn("Inspect user units: systemctl --user status ygg-heimdall.timer", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

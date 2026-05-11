@@ -83,6 +83,8 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
         "files": [
             "lib/ygg/path_contract.py",
             "lib/ygg/bootstrap_registry.py",
+            "machine/install-systemd-user-units.sh",
+            "machine/systemd/user",
             "state/templates/ygg-paths.yaml.template",
             "state/profiles/components.yaml",
         ],
@@ -90,6 +92,7 @@ REPO_SYSTEM_SPECS: tuple[dict[str, Any], ...] = (
             "tests/test_bootstrap_inspect.py",
             "tests/test_bootstrap_profiles.py",
             "tests/test_bootstrap_registry.py",
+            "tests/test_systemd_user_units.py",
         ],
         "commands": ["paths", "bootstrap"],
     },

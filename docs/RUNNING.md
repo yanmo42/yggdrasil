@@ -33,6 +33,72 @@ ygg status
 
 from anywhere.
 
+## User-level systemd on Arch
+
+Ygg now ships a first user-level systemd path for Arch-style machines.
+The intended surface is:
+
+- tracked templates in `~/ygg/machine/systemd/user/`
+- rendered units in `~/.config/systemd/user/`
+- current useful unit: `ygg-heimdall.service` with `ygg-heimdall.timer`
+
+This stays inside the local user account instead of assuming a root-owned global service.
+
+### Install the units
+
+```bash
+~/ygg/machine/install-systemd-user-units.sh
+systemctl --user daemon-reload
+```
+
+Or do it as part of host bootstrap:
+
+```bash
+~/ygg/machine/bootstrap-host.sh --profile stable --install-user-units
+```
+
+### Enable the timer
+
+```bash
+~/ygg/machine/install-systemd-user-units.sh --enable-timers
+systemctl --user status ygg-heimdall.timer
+systemctl --user list-timers ygg-heimdall.timer
+```
+
+The timer runs:
+
+```bash
+ygg heimdall --workspace ~/ygg --note --ratatoskr
+```
+
+That gives Ygg a portable user-session refresh loop without making system boot depend on a root service.
+
+## Morning restart ritual
+
+After a reboot or full OpenClaw restart, the canonical single-command re-entry path is:
+
+```bash
+ygg wake
+```
+
+`ygg wake` intentionally crosses the boundary between OpenClaw runtime health and Ygg continuity state. It runs the practical morning flush in one pass:
+- `openclaw status`
+- Ygg repo status
+- `ygg heimdall --note --ratatoskr`
+- `ygg frontier current`
+- `ygg frontier open`
+- Sandy Chaos repo status
+
+Use `ygg wake --print-only` if you want to inspect the ritual without launching it.
+
+### Arch note
+
+If you want user timers to run without an active login session, enable lingering for the operator account:
+
+```bash
+loginctl enable-linger "$USER"
+```
+
 ## Important filesystem detail
 
 `~/.local/bin/ygg` is a **symlink**, not a copy.
