@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pwd
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -102,8 +103,17 @@ def _unique(paths: list[Path]) -> list[Path]:
     return out
 
 
+def _account_home() -> Path:
+    """Return the OS account home, ignoring runtime HOME overrides when present."""
+    try:
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except Exception:  # pragma: no cover - defensive platform fallback
+        return Path.home()
+
+
 def candidate_contract_paths() -> list[Path]:
     home = Path.home()
+    account_home = _account_home()
     module_root = Path(__file__).resolve().parents[1]  # usually ~/ygg/lib
     repo_root = module_root.parent if module_root.name == "lib" else module_root
 
@@ -123,6 +133,8 @@ def candidate_contract_paths() -> list[Path]:
             repo_root / "config" / "ygg-paths.yaml",
             home / ".openclaw" / "workspace-claw-main" / "config" / "ygg-paths.yaml",
             home / ".openclaw" / "workspace" / "config" / "ygg-paths.yaml",
+            account_home / ".openclaw" / "workspace-claw-main" / "config" / "ygg-paths.yaml",
+            account_home / ".openclaw" / "workspace" / "config" / "ygg-paths.yaml",
         ]
     )
     return _unique(paths)
@@ -155,7 +167,7 @@ def load_contract(path_override: str | Path | None = None) -> tuple[dict[str, An
 
 
 def resolve_runtime_paths(path_override: str | Path | None = None) -> RuntimePaths:
-    home = Path.home()
+    home = _account_home()
     fallback_spine = home / ".openclaw" / "workspace-claw-main"
     fallback_control_plane = home / "ygg"
     fallback_control_bin = home / ".local" / "bin" / "ygg"

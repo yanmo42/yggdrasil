@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-04-02T14:38:00-04:00",
+  "updatedAt": "2026-05-12T10:31:12-04:00",
   "ideas": [
     {
       "id": "topology-aware-continuity-retrieval",
@@ -10,14 +10,14 @@
       "claimTier": "plausible",
       "origin": "Ian + Solace/Nyx",
       "links": {
+        "programs": [
+          "ygg-continuity-integration"
+        ],
         "checkpoints": [
           "state/ygg/checkpoints/2026-03-27T21-41-12.361720+00-00_topological-memory.json"
         ],
         "promotionTargets": [
           "docs/archive/topological_memory_continuity_retrieval_v0.md"
-        ],
-        "programs": [
-          "ygg-continuity-integration"
         ]
       },
       "nextAction": "Build a 30-query benchmark against keyword, recency, and embedding baselines.",
@@ -28,6 +28,24 @@
         "continuity"
       ],
       "notes": []
+    },
+    {
+      "id": "chronophore",
+      "title": "Chronophore",
+      "status": "incubating",
+      "summary": "Replacement term for the non-physical Sophon-like witness-form in the Merge Protocol essay: a carrier of observational coherence through temporal merge geometry, not an unfolded/reassembled physical proton.",
+      "claimTier": "speculative",
+      "origin": "Ian + Solace, 2026-05-12 Merge Protocol naming",
+      "nextAction": "Use Chronophore as the formal term when revising the Merge Protocol essay; reserve Aletheion for a future truth/unconcealment concept.",
+      "tags": [
+        "sandy-chaos",
+        "merge-protocol",
+        "temporal-dynamics",
+        "naming"
+      ],
+      "notes": [
+        "Aletheion remains a strong future candidate, likely for a related truth-field or unconcealment-system concept rather than the immediate object."
+      ]
     }
   ]
 }
